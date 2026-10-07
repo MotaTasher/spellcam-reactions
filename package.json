@@ -1,0 +1,12 @@
+{
+  "name": "circle-effects",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "python3 server.py",
+    "shots": "node tools/shots.mjs"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^24.0.0"
+  }
+}

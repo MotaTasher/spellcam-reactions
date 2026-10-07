@@ -1,0 +1,49 @@
+name: Реакции
+
+on:
+  pull_request:
+    paths: ['effects/**', 'app.js', 'index.html', 'detect-worker.js', 'tools/**']
+  push:
+    branches: [main]
+    paths: ['effects/**', 'app.js', 'index.html', 'detect-worker.js', 'tools/**']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: browser-actions/setup-chrome@v1
+        id: chrome
+        with:
+          install-dependencies: true
+      - run: npm i --no-save puppeteer-core
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Сервер страницы
+        run: |
+          python3 server.py &
+          sleep 2
+      - name: Проверка реакций
+        run: node tools/check.mjs
+        env:
+          CHROME: ${{ steps.chrome.outputs.chrome-path }}
+      - name: Превью изменённых реакций
+        if: github.event_name == 'pull_request'
+        run: |
+          ids=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- effects \
+            | sed -n 's#^effects/\([a-z0-9_-]*\)\.js$#\1#p' | grep -v -e '^lib$' -e '^index$' -e '^_' || true)
+          echo "изменены: $ids"
+          if [ -n "$ids" ]; then node tools/previews.mjs $ids; fi
+        env:
+          CHROME: ${{ steps.chrome.outputs.chrome-path }}
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request'
+        with:
+          name: previews
+          path: docs/previews/
+          if-no-files-found: ignore
