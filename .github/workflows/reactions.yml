@@ -36,7 +36,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           ids=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- effects \
-            | sed -n 's#^effects/\([a-z0-9_-]*\)\.js$#\1#p' | grep -v -e '^lib$' -e '^index$' -e '^_' || true)
+            | sed -n 's#^effects/\([a-z0-9_-]*\)\.js$#\1#p' | grep -v -e '^lib$' -e '^sfx$' -e '^index$' -e '^_' || true)
           echo "изменены: $ids"
           if [ -n "$ids" ]; then node tools/previews.mjs $ids; fi
         env:

@@ -32,7 +32,7 @@
 python3 server.py     # http://127.0.0.1:8765
 ```
 
-Пробел — запись, 1–0 и q–r — реакции. Реакции рисуются на canvas 2D, лицо и силуэт
+Пробел — запись, 1–0 и q–o — реакции. Реакции рисуются на canvas 2D, лицо и силуэт
 находит [MediaPipe](https://ai.google.dev/edge/mediapipe/solutions/vision/face_detector)
 прямо в браузере, сборки нет. `./tools/vendor.sh` один раз скачает MediaPipe локально
 (без него он грузится с jsDelivr).
