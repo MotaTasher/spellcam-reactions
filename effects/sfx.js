@@ -217,3 +217,50 @@ export function powerUp(a, at = 0, dur = 1.8) {
   }
   tone(a, { at: at + dur * 0.3, type: 'sine', from: 880, to: 1760, glide: dur * 0.5, dur: dur * 0.7, gain: 0.07, attack: 0.2, release: 0.4, vibrato: { rate: 6, cents: 30 } });
 }
+
+export function buzzer(a, at = 0) {
+  for (const f of [140, 146]) {
+    tone(a, { at, type: 'square', from: f, dur: 0.6, gain: 0.16, attack: 0.01, release: 0.15, filter: { type: 'lowpass', from: 700, q: 1 } });
+  }
+  tone(a, { at, type: 'sawtooth', from: 70, dur: 0.6, gain: 0.12, attack: 0.01, release: 0.15, filter: { type: 'lowpass', from: 300 } });
+}
+
+export function ding(a, at = 0) {
+  tone(a, { at, type: 'sine', from: 880, dur: 0.5, gain: 0.25, attack: 0.003, release: 0.4 });
+  tone(a, { at: at + 0.12, type: 'sine', from: 1318.5, dur: 0.7, gain: 0.22, attack: 0.003, release: 0.6 });
+  tone(a, { at: at + 0.12, type: 'triangle', from: 2637, dur: 0.8, gain: 0.07, attack: 0.003, release: 0.7 });
+}
+
+export function cymbal(a, at = 0) {
+  hit(a, at, 0.3);
+  noise(a, { at, dur: 1.5, gain: 0.28, attack: 0.002, release: 1.4, filter: { type: 'highpass', from: 5000 } });
+  noise(a, { at, dur: 1.0, gain: 0.12, attack: 0.002, release: 0.9, filter: { type: 'bandpass', from: 8000, q: 2 } });
+}
+
+export function drumroll(a, at = 0, dur = 1.6) {
+  let t = 0;
+  while (t < dur) {
+    const p = t / dur;
+    noise(a, { at: at + t, dur: 0.05, gain: 0.22 + 0.1 * p, attack: 0.002, release: 0.04, filter: { type: 'lowpass', from: 1200, to: 300 } });
+    tone(a, { at: at + t, type: 'sine', from: 180, to: 90, glide: 0.05, dur: 0.06, gain: 0.22, attack: 0.002, release: 0.04 });
+    t += 0.095 - 0.05 * p;
+  }
+}
+
+export function crickets(a, at = 0, dur = 3) {
+  for (let s = 0; s < dur; s += 0.55 + Math.random() * 0.15) {
+    const f = 4200 + Math.random() * 300;
+    for (let i = 0; i < 3; i++) {
+      tone(a, { at: at + s + i * 0.045, type: 'sine', from: f, dur: 0.03, gain: 0.22, attack: 0.005, release: 0.015 });
+    }
+  }
+}
+
+export function applause(a, at = 0, dur = 2.6) {
+  noise(a, { at, dur, gain: 0.07, attack: 0.3, release: 0.8, filter: { type: 'lowpass', from: 500 } });
+  for (let i = 0; i < 110; i++) {
+    const s = Math.random() * dur;
+    const w = Math.sin((s / dur) * Math.PI);
+    noise(a, { at: at + s, dur: 0.02 + Math.random() * 0.02, gain: 0.08 + 0.16 * w, attack: 0.002, release: 0.015, filter: { type: 'bandpass', from: 1500 + Math.random() * 2000, q: 1.5 } });
+  }
+}

@@ -12,5 +12,10 @@ import deal from './deal.js';
 import wasted from './wasted.js';
 import drama from './drama.js';
 import aura from './aura.js';
+import no from './no.js';
+import yes from './yes.js';
+import drumroll from './drumroll.js';
+import crickets from './crickets.js';
+import applause from './applause.js';
 
-export const EFFECTS = [fireworks, confetti, hearts, money, bam, vzhuh, ogo, haha, lasers, sad, deal, wasted, drama, aura];
+export const EFFECTS = [fireworks, confetti, hearts, money, bam, vzhuh, ogo, haha, lasers, sad, deal, wasted, drama, aura, no, yes, drumroll, crickets, applause];

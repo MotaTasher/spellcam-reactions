@@ -17,8 +17,12 @@
 | 💥 **БАХ!** | 🪄 **Вжух** | 😍 **ОГО!** | 😂 **ХА-ХА** |
 | <img src="docs/previews/lasers.gif" width="160" alt="Лазеры"> | <img src="docs/previews/sad.gif" width="160" alt="Грусть"> | <img src="docs/previews/deal.gif" width="160" alt="Очки"> | <img src="docs/previews/wasted.gif" width="160" alt="Потрачено"> |
 | 🔴 **Лазеры** | 🌧️ **Грусть** | 😎 **Очки** | 💀 **Потрачено** |
-| <img src="docs/previews/drama.gif" width="160" alt="Драма"> | <img src="docs/previews/aura.gif" width="160" alt="Аура"> |
-| 🎭 **Драма** | ⚡ **Аура** |
+| <img src="docs/previews/drama.gif" width="160" alt="Драма"> | <img src="docs/previews/aura.gif" width="160" alt="Аура"> | <img src="docs/previews/no.gif" width="160" alt="Нет!"> | <img src="docs/previews/yes.gif" width="160" alt="Да!"> |
+| 🎭 **Драма** | ⚡ **Аура** | 🚫 **Нет!** | ✅ **Да!** |
+| <img src="docs/previews/drumroll.gif" width="160" alt="Та-дам"> | <img src="docs/previews/crickets.gif" width="160" alt="Сверчки"> | <img src="docs/previews/applause.gif" width="160" alt="Браво"> |
+| 🥁 **Та-дам** | 🦗 **Сверчки** | 👏 **Браво** |
+
+У каждой реакции есть звук: он слышен во время записи и попадает в кружок.
 
 Каждая реакция — отдельный файл в [`effects/`](effects/). Добавить свою — ниже.
 
