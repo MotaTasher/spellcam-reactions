@@ -392,8 +392,53 @@ function render() {
   for (const e of active) if (e.inst.overlay) e.inst.overlay(ctx, env);
 }
 
+let audio = null;
+let recMixed = false;
+
+function ensureAudio() {
+  if (audio) return audio;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  const ac = new AC();
+  const recDest = ac.createMediaStreamDestination();
+  const out = ac.createGain();
+  const limiter = ac.createDynamicsCompressor();
+  limiter.threshold.value = -8;
+  limiter.knee.value = 6;
+  limiter.ratio.value = 12;
+  limiter.attack.value = 0.002;
+  limiter.release.value = 0.12;
+  const monitor = ac.createGain();
+  monitor.gain.value = mobile ? 0.5 : 0.7;
+  out.connect(limiter);
+  limiter.connect(recDest);
+  limiter.connect(monitor).connect(ac.destination);
+  audio = { ac, out, recDest, monitor, mic: null };
+  return audio;
+}
+
+function wakeAudio() {
+  const a = ensureAudio();
+  if (a && a.ac.state !== 'running') a.ac.resume().catch(() => {});
+}
+
+function wireMic() {
+  const a = audio;
+  const tracks = stream ? stream.getAudioTracks() : [];
+  if (!a || !tracks.length) return false;
+  if (a.mic) a.mic.disconnect();
+  a.mic = a.ac.createMediaStreamSource(new MediaStream(tracks));
+  a.mic.connect(a.recDest);
+  return true;
+}
+
 function fire(def) {
-  active.push({ def, inst: def.make(env) });
+  const inst = def.make(env);
+  active.push({ def, inst });
+  if (!inst.sound) return;
+  const a = ensureAudio();
+  if (!a || a.ac.state !== 'running' || (rec && !recMixed)) return;
+  try { inst.sound({ ac: a.ac, out: a.out }); } catch (e) { console.warn(e); }
 }
 
 function syncButtons() {
@@ -413,7 +458,7 @@ function buildButtons() {
     b.className = 'fx';
     b.dataset.id = def.id;
     b.innerHTML = `<span class="e">${def.emoji}</span><span class="n">${def.name}</span><kbd>${KEYS[i] || ''}</kbd>`;
-    b.addEventListener('pointerdown', (ev) => { ev.preventDefault(); fire(def); });
+    b.addEventListener('pointerdown', (ev) => { ev.preventDefault(); wakeAudio(); fire(def); });
     bar.appendChild(b);
   });
   window.addEventListener('keydown', (ev) => {
@@ -453,7 +498,10 @@ function toggleRec() {
 
 function startRec() {
   const out = canvas.captureStream(30);
-  for (const tr of stream.getAudioTracks()) out.addTrack(tr);
+  const a = ensureAudio();
+  recMixed = !!(a && a.ac.state === 'running' && wireMic());
+  if (recMixed) for (const tr of a.recDest.stream.getAudioTracks()) out.addTrack(tr);
+  else for (const tr of stream.getAudioTracks()) out.addTrack(tr);
   recMime = pickMime();
   rec = new MediaRecorder(out, { mimeType: recMime || undefined, videoBitsPerSecond: mobile ? 1_000_000 : 1_200_000 });
   chunks = [];
@@ -519,8 +567,10 @@ $('#again').addEventListener('click', () => {
 let pressAt = 0;
 let pressing = false;
 const recBtn = $('#recbtn');
+document.addEventListener('pointerdown', wakeAudio, { capture: true, passive: true });
 recBtn.addEventListener('pointerdown', (ev) => {
   ev.preventDefault();
+  wakeAudio();
   if (!$('#preview').hidden) return;
   if (rec) { stopRec(); return; }
   startRec();
@@ -566,4 +616,4 @@ $('#flip').addEventListener('click', flipCamera);
   }
 })();
 
-window.__fx = { ids: EFFECTS.map((e) => e.id), meta: EFFECTS.map((e) => ({ id: e.id, name: e.name, emoji: e.emoji, make: typeof e.make === 'function' })), fire: (id) => fire(EFFECTS.find((e) => e.id === id)), toggleRec, get active() { return active.map((e) => e.def.id); }, get face() { return face; } };
+window.__fx = { ids: EFFECTS.map((e) => e.id), meta: EFFECTS.map((e) => ({ id: e.id, name: e.name, emoji: e.emoji, make: typeof e.make === 'function' })), fire: (id) => fire(EFFECTS.find((e) => e.id === id)), make: (id) => EFFECTS.find((e) => e.id === id).make(env), toggleRec, get active() { return active.map((e) => e.def.id); }, get face() { return face; }, get mixed() { return recMixed; } };
