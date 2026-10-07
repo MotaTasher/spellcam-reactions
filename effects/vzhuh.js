@@ -1,4 +1,5 @@
 import { TAU, rand, clamp, easeOutBack, drawGlow, faceOrDefault } from './lib.js';
+import { whoosh, sparkle } from './sfx.js';
 
 function star4(ctx, x, y, r) {
   ctx.beginPath();
@@ -30,6 +31,7 @@ function vzhuh(env) {
   const tx = clamp(cx, C * 0.3, C * 0.7), ty = clamp(f.box.y - C * 0.06, C * 0.14, C * 0.5);
 
   return {
+    sound(a) { whoosh(a); sparkle(a, 0.22); },
     get done() { return t > dur && !stars.length; },
     update(dt) {
       t += dt;

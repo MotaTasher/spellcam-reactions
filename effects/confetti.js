@@ -1,4 +1,5 @@
 import { TAU, rand, pick, clamp, drawGlow } from './lib.js';
+import { tada } from './sfx.js';
 
 const CONFETTI = [
   ['#ff3b5c', '#b81d3a'], ['#ffd23f', '#c99a00'], ['#3bceac', '#1d8a72'],
@@ -13,6 +14,7 @@ function confetti(env) {
   const total = 320;
   const pops = [];
   return {
+    sound(a) { tada(a); },
     get done() { return t > 0.5 && !pieces.length; },
     update(dt) {
       t += dt;

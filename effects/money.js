@@ -1,4 +1,5 @@
 import { TAU, rand, pick, envelope, drawGlow, emojiSprite } from './lib.js';
+import { cash } from './sfx.js';
 
 function money(env) {
   const C = env.C;
@@ -9,6 +10,7 @@ function money(env) {
   const dur = 3.2;
   const set = ['💸', '💵', '💵', '💰', '🤑', '💎'];
   return {
+    sound(a) { cash(a); cash(a, 0.55); },
     get done() { return t > dur && !items.length; },
     update(dt) {
       t += dt;

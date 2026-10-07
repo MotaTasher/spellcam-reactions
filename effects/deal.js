@@ -1,4 +1,5 @@
 import { clamp, faceOrDefault } from './lib.js';
+import { riff } from './sfx.js';
 
 const GLASSES = (() => {
   const W = 25, rows = [];
@@ -23,6 +24,7 @@ function dealWithIt(env) {
   const dur = 4.6;
   const drop = 1.4;
   return {
+    sound(a) { riff(a); },
     get done() { return t > dur; },
     update(dt) { t += dt; },
     draw(ctx, e) {

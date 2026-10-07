@@ -1,4 +1,5 @@
 import { TAU, rand, clamp, envelope, glow, drawGlow, faceOrDefault } from './lib.js';
+import { zap, hum } from './sfx.js';
 
 function lasers(env) {
   const C = env.C;
@@ -6,6 +7,7 @@ function lasers(env) {
   const dur = 3.8;
   let sparks = [];
   return {
+    sound(a) { zap(a); zap(a, 0.12, 0.22); hum(a, 0.15, 1.6); },
     get done() { return t > dur && !sparks.length; },
     update(dt, e) {
       t += dt;

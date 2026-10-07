@@ -1,4 +1,5 @@
 import { rand, envelope, drawGlow } from './lib.js';
+import { powerUp } from './sfx.js';
 
 function aura(env) {
   const C = env.C;
@@ -9,6 +10,7 @@ function aura(env) {
   let boltT = 0;
   let small = null;
   return {
+    sound(a) { powerUp(a); },
     needsMask: true,
     get done() { return t > dur; },
     update(dt, e) {

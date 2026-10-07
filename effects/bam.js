@@ -1,4 +1,5 @@
 import { TAU, rand, pick, clamp, easeOutBack, easeOutCubic, faceOrDefault } from './lib.js';
+import { boom } from './sfx.js';
 
 function bam(env) {
   const C = env.C;
@@ -14,6 +15,7 @@ function bam(env) {
     return { x: cx, y: cy, vx: Math.cos(a) * s, vy: Math.sin(a) * s, r: rand(0, TAU), vr: rand(-12, 12), s: C * rand(0.008, 0.02), c: pick(['#111', '#ffd400', '#ff2a2a']) };
   });
   return {
+    sound(a) { boom(a); },
     get done() { return t > dur; },
     shake() {
       if (t > 0.6) return null;

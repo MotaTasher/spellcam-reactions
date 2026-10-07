@@ -1,4 +1,5 @@
 import { TAU, rand, envelope, drawGlow, faceOrDefault } from './lib.js';
+import { pop } from './sfx.js';
 
 function template(env) {
   const C = env.C;
@@ -7,6 +8,7 @@ function template(env) {
   let dots = [];
 
   return {
+    sound(a) { pop(a); },
     get done() { return t > dur && !dots.length; },
 
     update(dt, env) {

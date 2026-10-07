@@ -1,4 +1,5 @@
 import { TAU, rand, pick, clamp, easeOutBack, emojiSprite, faceOrDefault } from './lib.js';
+import { laugh } from './sfx.js';
 
 const COLORS = ['#ffd23f', '#ff8a3d', '#ff3b5c', '#7ce0ff', '#b6ff5c'];
 
@@ -12,6 +13,7 @@ function haha(env) {
   const total = 13;
 
   return {
+    sound(a) { laugh(a); },
     get done() { return t > dur && !words.length && !emojis.length; },
     shake() {
       if (t > dur - 0.3) return null;

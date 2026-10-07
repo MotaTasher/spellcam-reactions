@@ -12,7 +12,7 @@ const fail = (msg) => { failed++; console.log('✗', msg); };
 
 const index = readFileSync('effects/index.js', 'utf8');
 for (const f of readdirSync('effects')) {
-  if (!f.endsWith('.js') || f === 'index.js' || f === 'lib.js' || f.startsWith('_')) continue;
+  if (!f.endsWith('.js') || f === 'index.js' || f === 'lib.js' || f === 'sfx.js' || f.startsWith('_')) continue;
   if (!index.includes(`'./${f}'`)) fail(`effects/${f} не подключён в effects/index.js`);
 }
 
@@ -56,6 +56,22 @@ for (const id of ids) {
   if (errors.length) fail(`«${id}»: ошибка на странице: ${errors[0]}`);
   else if (r.still) fail(`«${id}»: не закончилась за 15 секунд (done так и не стал true)`);
   else console.log(`✓ ${id}: ${r.secs.toFixed(1)} с, ${r.fps.toFixed(0)} fps, худший кадр ${r.worst.toFixed(0)} мс`);
+  const s = await page.evaluate(async (id) => {
+    const inst = window.__fx.make(id);
+    if (!inst.sound) return null;
+    const rate = 44100, ac = new OfflineAudioContext(1, rate * 8, rate);
+    try { inst.sound({ ac, out: ac.destination }); } catch (e) { return { error: String(e) }; }
+    const buf = await ac.startRendering();
+    const d = buf.getChannelData(0);
+    let peak = 0, last = 0;
+    for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > peak) peak = v; if (v > 0.002) last = i; }
+    return { peak, secs: last / rate };
+  }, id);
+  if (s && s.error) fail(`«${id}»: звук падает: ${s.error}`);
+  else if (s && s.secs < 0.05) fail(`«${id}»: звук есть, но тишина`);
+  else if (s && s.secs > 6) fail(`«${id}»: звук длиннее 6 секунд (${s.secs.toFixed(1)} с)`);
+  else if (s && s.peak > 1) fail(`«${id}»: звук клиппует (пик ${s.peak.toFixed(2)})`);
+  else if (s) console.log(`  ♪ ${s.secs.toFixed(1)} с, пик ${s.peak.toFixed(2)}`);
   await sleep(300);
 }
 await browser.close();

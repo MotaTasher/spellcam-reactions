@@ -1,4 +1,5 @@
 import { TAU, rand, clamp, envelope, faceOrDefault } from './lib.js';
+import { sadTrombone } from './sfx.js';
 
 function sad(env) {
   const C = env.C;
@@ -8,6 +9,7 @@ function sad(env) {
   const puffs = [[-0.32, 0.05, 0.24], [-0.12, -0.1, 0.3], [0.12, -0.06, 0.28], [0.32, 0.06, 0.22], [0, 0.08, 0.3]];
   let cloud = null;
   return {
+    sound(a) { sadTrombone(a); },
     get done() { return t > dur; },
     filter() {
       const a = envelope(t, dur, 0.4, 0.5);

@@ -1,4 +1,5 @@
 import { TAU, rand, pick, clamp, easeOutBack, drawGlow, emojiSprite, heart } from './lib.js';
+import { chime } from './sfx.js';
 
 function hearts(env) {
   const C = env.C;
@@ -9,6 +10,7 @@ function hearts(env) {
   const dur = 2.6;
   const emojis = ['💖', '💗', '💕', '❤️'];
   return {
+    sound(a) { chime(a); },
     get done() { return t > dur && !items.length; },
     update(dt) {
       t += dt;

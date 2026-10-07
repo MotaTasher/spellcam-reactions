@@ -1,4 +1,5 @@
 import { TAU, rand, clamp, easeOutBack, drawGlow, heart, faceOrDefault } from './lib.js';
+import { boing, sparkle } from './sfx.js';
 
 function ogo(env) {
   const C = env.C;
@@ -34,6 +35,7 @@ function ogo(env) {
   }
 
   return {
+    sound(a) { boing(a); sparkle(a, 0.2, 5, 0.1); },
     get done() { return t > dur && !minis.length; },
     update(dt, e) {
       t += dt;

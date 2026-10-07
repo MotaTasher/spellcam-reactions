@@ -1,4 +1,5 @@
 import { TAU, rand, drawGlow } from './lib.js';
+import { fireworks as launch } from './sfx.js';
 
 function fireworks(env) {
   const C = env.C;
@@ -28,6 +29,7 @@ function fireworks(env) {
   }
 
   return {
+    sound(a) { launch(a); },
     get done() { return t > 1 && launches.every((l) => l.fired) && !rockets.length && !sparks.length; },
     update(dt) {
       t += dt;

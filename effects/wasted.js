@@ -1,4 +1,5 @@
 import { clamp, envelope, easeOutCubic, faceOrDefault } from './lib.js';
+import { wasted as impact } from './sfx.js';
 
 function wasted(env) {
   const C = env.C;
@@ -6,6 +7,7 @@ function wasted(env) {
   let t = 0;
 
   return {
+    sound(a) { impact(a); },
     get done() { return t > dur; },
     update(dt) { t += dt; },
     filter() {

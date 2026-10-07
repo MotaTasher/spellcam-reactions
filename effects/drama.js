@@ -1,4 +1,5 @@
 import { clamp, easeOutCubic, faceOrDefault } from './lib.js';
+import { dunDunDun } from './sfx.js';
 
 function drama(env) {
   const C = env.C;
@@ -12,6 +13,7 @@ function drama(env) {
   };
 
   return {
+    sound(a) { dunDunDun(a); },
     get done() { return t > dur; },
     update(dt) { t += dt; },
     zoom(e) {
