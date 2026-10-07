@@ -8,7 +8,7 @@ function no(env) {
   const f = faceOrDefault(env);
   const cx = f.box.x + f.box.w / 2, cy = f.box.y + f.box.h / 2;
   const R = clamp(f.box.w * 0.85, C * 0.18, C * 0.36);
-  const ty = Math.min(cy + R * 1.45, C * 0.9);
+  const ty = Math.min(cy + R * 1.45, C * 0.82);
   return {
     sound(a) { buzzer(a); },
     get done() { return t > dur; },

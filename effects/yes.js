@@ -10,7 +10,7 @@ function yes(env) {
   const R = clamp(f.box.w * 0.8, C * 0.16, C * 0.34);
   const pts = [[-0.55, 0.02], [-0.15, 0.42], [0.62, -0.5]];
   const sparks = Array.from({ length: 14 }, () => ({ a: rand(0, TAU), r: rand(0.9, 1.5), s: rand(0.3, 0.8), ph: rand(0, 1) }));
-  const ty = Math.min(cy + R * 1.4, C * 0.9);
+  const ty = Math.min(cy + R * 1.4, C * 0.82);
   const seg = (p) => {
     const path = [pts[0]];
     if (p < 0.4) path.push([pts[0][0] + (pts[1][0] - pts[0][0]) * (p / 0.4), pts[0][1] + (pts[1][1] - pts[0][1]) * (p / 0.4)]);

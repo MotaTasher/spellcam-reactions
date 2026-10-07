@@ -38,7 +38,7 @@ function bravo(env) {
       const sp = easeOutBack(clamp((t - 0.5) / 0.3, 0, 1));
       if (sp > 0) {
         ctx.globalAlpha = a;
-        ctx.translate(C / 2, Math.min(f.box.y + f.box.h + R * 0.9, C * 0.9));
+        ctx.translate(C / 2, Math.min(f.box.y + f.box.h + R * 0.9, C * 0.82));
         ctx.scale(sp, sp);
         ctx.rotate(0.05);
         ctx.font = `italic 900 ${R * 0.5}px "Arial Black", Impact, system-ui, sans-serif`;

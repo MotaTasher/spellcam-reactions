@@ -21,10 +21,10 @@ function roll(env) {
     draw(ctx) {
       if (t < roll + 0.15) {
         const p = clamp(t / roll, 0, 1);
-        const r = C * 0.95 - (C * 0.95 - R * 1.1) * easeOutCubic(p);
-        const g = ctx.createRadialGradient(cx, cy, r * 0.8, cx, cy, r * 1.25);
+        const r = C * 0.6 - (C * 0.6 - R * 0.8) * easeOutCubic(p);
+        const g = ctx.createRadialGradient(cx, cy, r * 0.7, cx, cy, r * 1.15);
         g.addColorStop(0, 'rgba(0,0,0,0)');
-        g.addColorStop(1, `rgba(0,0,0,${0.82 * Math.min(1, t * 3)})`);
+        g.addColorStop(1, `rgba(0,0,0,${0.88 * Math.min(1, t * 3)})`);
         ctx.save();
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, C, C);
@@ -49,7 +49,7 @@ function roll(env) {
       const sp = 1 + 0.12 * Math.sin(Math.min(k * 10, Math.PI));
       ctx.save();
       ctx.globalAlpha = 1 - Math.max(0, (k - 0.6) / 0.4);
-      ctx.translate(cx, Math.min(cy + R * 1.4, C * 0.9));
+      ctx.translate(cx, Math.min(cy + R * 1.4, C * 0.82));
       ctx.scale(sp, sp);
       ctx.rotate(-0.06);
       ctx.font = `italic 900 ${R * 0.5}px "Arial Black", Impact, system-ui, sans-serif`;
