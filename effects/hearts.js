@@ -10,6 +10,7 @@ function hearts(env, hand) {
   const dur = 2.6;
   const emojis = ['💖', '💗', '💕', '❤️'];
   const bx = hand ? hand.x : C / 2, by = hand ? hand.y : C / 2;
+  const fixed = hand && hand.gesture === 'Heart';
   const big = hand ? clamp(hand.size * 2, C * 0.25, C * 0.5) : C * 0.55;
   return {
     sound(a) { chime(a); },
@@ -17,7 +18,7 @@ function hearts(env, hand) {
     update(dt, env) {
       t += dt;
       const want = Math.min(total, Math.floor((t / dur) * total));
-      const src = hand && (env.hand || hand);
+      const src = hand && (fixed ? hand : env.hand || hand);
       while (emitted < want) {
         const s = C * rand(0.035, 0.09);
         items.push({
@@ -82,4 +83,4 @@ function hearts(env, hand) {
   };
 }
 
-export default { id: 'hearts', name: 'Сердечки', emoji: '💖', gesture: 'ILoveYou', make: hearts };
+export default { id: 'hearts', name: 'Сердечки', emoji: '💖', gesture: ['Heart', 'ILoveYou'], make: hearts };

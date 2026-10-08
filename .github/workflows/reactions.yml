@@ -2,10 +2,10 @@ name: Реакции
 
 on:
   pull_request:
-    paths: ['effects/**', 'app.js', 'index.html', 'detect-worker.js', 'tools/**']
+    paths: ['effects/**', 'app.js', 'spells.js', 'index.html', 'detect-worker.js', 'tools/**']
   push:
     branches: [main]
-    paths: ['effects/**', 'app.js', 'index.html', 'detect-worker.js', 'tools/**']
+    paths: ['effects/**', 'app.js', 'spells.js', 'index.html', 'detect-worker.js', 'tools/**']
 
 jobs:
   check:
@@ -18,6 +18,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Логика жестов
+        run: node tools/spells-test.mjs
       - uses: browser-actions/setup-chrome@v1
         id: chrome
         with:

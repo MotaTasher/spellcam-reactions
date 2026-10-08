@@ -1,9 +1,12 @@
 import { EFFECTS } from './effects/index.js';
+import { createSpells } from './spells.js';
 
 const CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/';
-const GESTURES = { Thumb_Up: '👍', Thumb_Down: '👎', Closed_Fist: '✊', Open_Palm: '✋', Victory: '✌️', Pointing_Up: '☝️', ILoveYou: '🤟' };
+const GESTURES = { Thumb_Up: '👍', Thumb_Down: '👎', Closed_Fist: '✊', Open_Palm: '✋', Victory: '✌️', Pointing_Up: '☝️', ILoveYou: '🤟', Knock: '✊', Heart: '🫶' };
+const gesturesOf = (e) => [].concat(e.gesture || []);
 const SPELLS = new Map();
-for (const e of EFFECTS) if (GESTURES[e.gesture] && !SPELLS.has(e.gesture)) SPELLS.set(e.gesture, e);
+for (const e of EFFECTS) for (const g of gesturesOf(e)) if (GESTURES[g] && !SPELLS.has(g)) SPELLS.set(g, e);
+const HAND_SIDE = 384;
 
 async function loadVision(base) {
   for (const root of [new URL('vendor/mediapipe/', base).href, CDN]) {
@@ -55,10 +58,11 @@ let segLoading = false;
 let face = null;
 let faceTarget = null;
 let faceMiss = 0;
-let hand = null;
-let handTarget = null;
-let handMiss = 0;
+let handViews = new Map();
+let handTargets = [];
+let primary = null;
 let handReady = false;
+const caster = createSpells();
 let lastHandAt = 0;
 let lastSegAt = 0;
 let buttonsKey = '';
@@ -139,7 +143,8 @@ function pickSource() {
 const env = {
   C,
   get face() { return (shown && shown.face) || face; },
-  get hand() { return hand; },
+  get hand() { return handViews.get(primary) || null; },
+  get hands() { return [...handViews.values()]; },
   get mask() { return maskReady ? maskCanvas : null; },
   frame,
   layer: (i) => layers[i],
@@ -195,7 +200,7 @@ async function flipCamera() {
     mirror = facing === 'user';
     face = null;
     faceTarget = null;
-    hand = handTarget = null;
+    dropHands();
     lastVideoTime = -1;
   } catch (e) {
     facing = prev;
@@ -238,8 +243,8 @@ function onWorker(e) {
   if (m.type === 'warn') { console.warn('worker:', m.error); return; }
   if (m.type === 'hand') {
     if (m.off) noSpells();
-    else onHand(m.hand);
-    if (m.handMs !== undefined) perf.hand = perf.hand * 0.8 + m.handMs * 0.2;
+    else onHand(m.hands || []);
+    if (m.handMs !== undefined) { perf.hand = perf.hand * 0.8 + m.handMs * 0.2; perf.hn++; }
     return;
   }
   workerBusy = false;
@@ -259,11 +264,14 @@ function sendFrame(now, needMask) {
   if (!worker || !workerReady || workerBusy) return;
   workerBusy = true;
   const w = Math.min(480, crop.vw), h = Math.round((w * crop.vh) / crop.vw);
-  const withHand = spellsOn && now - lastHandAt >= 125;
+  const withHand = spellsOn && now - lastHandAt >= (caster.count ? Math.min(125, Math.max(28, perf.hand * 1.5)) : 125);
   if (withHand) lastHandAt = now;
-  createImageBitmap(video, { resizeWidth: w, resizeHeight: h, resizeQuality: 'low' })
-    .catch(() => createImageBitmap(video))
-    .then((bitmap) => worker.postMessage({ type: 'frame', bitmap, ts: now, face: true, seg: needMask, hand: withHand }, [bitmap]))
+  const ox = Math.round(crop.ox), oy = Math.round(crop.oy), cs = Math.round(crop.s), hs = Math.min(HAND_SIDE, cs);
+  Promise.all([
+    createImageBitmap(video, { resizeWidth: w, resizeHeight: h, resizeQuality: 'low' }).catch(() => createImageBitmap(video)),
+    withHand ? createImageBitmap(video, ox, oy, cs, cs, { resizeWidth: hs, resizeHeight: hs, resizeQuality: 'low' }).catch(() => createImageBitmap(video, ox, oy, cs, cs)) : null,
+  ])
+    .then(([bitmap, hands]) => worker.postMessage({ type: 'frame', bitmap, hands, ts: now, face: true, seg: needMask }, hands ? [bitmap, hands] : [bitmap]))
     .catch(() => { workerBusy = false; });
 }
 
@@ -332,44 +340,44 @@ function followFace(dt) {
   for (const key of ['x', 'y', 'w', 'h']) face.box[key] += (faceTarget.box[key] - face.box[key]) * k;
 }
 
-const vpt = ([x, y]) => mapPt(x * crop.vw, y * crop.vh);
-const spell = { g: 'None', since: 0, seen: 0, cast: false };
-const castAt = {};
+const hpt = (x, y) => ({ x: (mirror ? 1 - x : x) * C, y: y * C });
+const rank = (h) => (h.gesture !== 'None' ? 1e4 : 0) + h.size;
 
-function onHand(h) {
+function onHand(list) {
   if (!spellsOn) return;
   handReady = true;
-  const c = h && vpt(h.c);
-  if (c && c.x > -C * 0.05 && c.x < C * 1.05 && c.y > -C * 0.05 && c.y < C * 1.05) {
-    const a = vpt(h.b), b = vpt(h.b.slice(2));
-    handTarget = { x: c.x, y: c.y, size: Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)), gesture: h.g, wrist: vpt(h.w) };
-    handMiss = 0;
-    cast(h.g, h.s, performance.now());
-  } else {
-    if (++handMiss > 2) handTarget = null;
-    cast('None', 0, performance.now());
+  const seen = list.map((h) => {
+    const a = hpt(h.b[0], h.b[1]), b = hpt(h.b[2], h.b[3]), k = h.k;
+    return { g: h.g, s: h.s, ...hpt(h.c[0], h.c[1]), size: Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)), z: h.z, wrist: hpt(h.w[0], h.w[1]), thumb: hpt(k[0], k[1]), pip: hpt(k[2], k[3]), index: hpt(k[4], k[5]), mcp: hpt(k[6], k[7]) };
+  });
+  const { hands, casts } = caster.step(performance.now(), seen);
+  handTargets = hands;
+  if (!hands.some((h) => h.id === primary)) primary = hands.reduce((a, h) => (!a || rank(h) > rank(a) ? h : a), null)?.id ?? null;
+  for (const c of casts) {
+    if (c.id) primary = c.id;
+    const def = SPELLS.get(c.spell);
+    if (def) fire(def, c.hand);
   }
 }
 
-function cast(g, s, now) {
-  if (g !== 'None' && g === spell.g && s >= 0.5) spell.seen = now;
-  else if (g !== 'None' && s >= (g === 'Open_Palm' ? 0.8 : 0.65)) Object.assign(spell, { g, since: now, seen: now, cast: false });
-  else if (now - spell.seen > 250) Object.assign(spell, { g: 'None', since: now, seen: now, cast: false });
-  const def = SPELLS.get(spell.g);
-  if (!def || !handTarget || spell.cast || spell.seen !== now || now - spell.since < (spell.g === 'Open_Palm' ? 450 : 260) || now - (castAt[spell.g] || -1e9) < 2000) return;
-  spell.cast = true;
-  castAt[spell.g] = now;
-  fire(def, { ...handTarget, wrist: { ...handTarget.wrist } });
+function followHands(dt) {
+  const k = 1 - Math.exp(-dt * 14);
+  for (const id of handViews.keys()) if (!handTargets.some((t) => t.id === id)) handViews.delete(id);
+  for (const t of handTargets) {
+    const v = handViews.get(t.id);
+    if (!v) { handViews.set(t.id, { ...t, wrist: { ...t.wrist } }); continue; }
+    for (const key of ['x', 'y', 'size']) v[key] += (t[key] - v[key]) * k;
+    v.wrist.x += (t.wrist.x - v.wrist.x) * k;
+    v.wrist.y += (t.wrist.y - v.wrist.y) * k;
+    v.gesture = t.gesture;
+  }
 }
 
-function followHand(dt) {
-  if (!handTarget) { hand = null; return; }
-  if (!hand) { hand = { ...handTarget, wrist: { ...handTarget.wrist } }; return; }
-  const k = 1 - Math.exp(-dt * 14);
-  for (const key of ['x', 'y', 'size']) hand[key] += (handTarget[key] - hand[key]) * k;
-  hand.wrist.x += (handTarget.wrist.x - hand.wrist.x) * k;
-  hand.wrist.y += (handTarget.wrist.y - hand.wrist.y) * k;
-  hand.gesture = handTarget.gesture;
+function dropHands() {
+  handTargets = [];
+  handViews.clear();
+  primary = null;
+  caster.reset();
 }
 
 function showSpells() {
@@ -379,7 +387,7 @@ function showSpells() {
 
 function toggleSpells() {
   spellsOn = !spellsOn;
-  if (!spellsOn) { hand = handTarget = null; Object.assign(spell, { g: 'None', cast: false }); }
+  if (!spellsOn) dropHands();
   try { localStorage.setItem('spellcam.gestures', spellsOn ? '1' : '0'); } catch (e) {}
   showSpells();
   flash(spellsOn ? 'Жесты включены' : 'Жесты выключены');
@@ -387,7 +395,7 @@ function toggleSpells() {
 
 function noSpells() {
   spellsOn = false;
-  hand = handTarget = null;
+  dropHands();
   showSpells();
   $('#spells').hidden = true;
 }
@@ -432,7 +440,7 @@ function applyMask(arr, w, h) {
   maskReady = true;
 }
 
-const perf = { face: 0, seg: 0, hand: 0, fps: 0, det: 0, detRate: 0, detAt: performance.now() };
+const perf = { face: 0, seg: 0, hand: 0, fps: 0, det: 0, detRate: 0, hn: 0, hn0: 0, handRate: 0, detAt: performance.now() };
 const hud = params.has('debug') ? document.createElement('div') : null;
 if (hud) {
   hud.style.cssText = 'position:fixed;left:8px;top:8px;z-index:20;font:12px/1.3 ui-monospace,Menlo,monospace;color:#0f0;background:rgba(0,0,0,.6);padding:4px 6px;border-radius:6px;pointer-events:none;white-space:pre';
@@ -440,8 +448,12 @@ if (hud) {
 }
 function drawHud(dt, now) {
   perf.fps = perf.fps * 0.9 + (dt > 0 ? 1 / dt : 0) * 0.1;
-  if (now - perf.detAt > 1000) { perf.detRate = (perf.det * 1000) / (now - perf.detAt); perf.det = 0; perf.detAt = now; }
-  hud.textContent = `${perf.fps.toFixed(0)} fps  C=${C}  ${worker ? 'worker' : 'main'}\nface ${perf.face.toFixed(1)} ms  seg ${perf.seg.toFixed(1)} ms  hand ${perf.hand.toFixed(1)} ms  det ${perf.detRate.toFixed(0)}/s\ncam ${video.videoWidth}x${video.videoHeight}  fx ${active.length}`;
+  if (now - perf.detAt > 1000) {
+    perf.detRate = (perf.det * 1000) / (now - perf.detAt);
+    perf.handRate = ((perf.hn - perf.hn0) * 1000) / (now - perf.detAt);
+    perf.det = 0; perf.hn0 = perf.hn; perf.detAt = now;
+  }
+  hud.textContent = `${perf.fps.toFixed(0)} fps  C=${C}  ${worker ? 'worker' : 'main'}\nface ${perf.face.toFixed(1)} ms  seg ${perf.seg.toFixed(1)} ms  det ${perf.detRate.toFixed(0)}/s\nhand ${perf.hand.toFixed(1)} ms  ${perf.handRate.toFixed(0)}/s  hands ${handViews.size}\ncam ${video.videoWidth}x${video.videoHeight}  fx ${active.length}`;
 }
 window.__perf = perf;
 
@@ -482,7 +494,7 @@ function loop(now) {
     }
   }
   followFace(dt);
-  followHand(dt);
+  followHands(dt);
   if (camReadyAt) remember();
   for (const e of active) e.inst.update(dt, env);
   active = active.filter((e) => !e.inst.done);
@@ -602,7 +614,7 @@ function buildButtons() {
     const b = document.createElement('button');
     b.className = 'fx';
     b.dataset.id = def.id;
-    const g = GESTURES[def.gesture];
+    const g = GESTURES[gesturesOf(def)[0]];
     b.innerHTML = `<span class="e">${def.emoji}</span><span class="n">${def.name}</span><kbd>${KEYS[i] || ''}</kbd>${g ? `<i class="g">${g}</i>` : ''}`;
     b.addEventListener('pointerdown', (ev) => { ev.preventDefault(); wakeAudio(); fire(def); });
     bar.appendChild(b);
@@ -765,4 +777,4 @@ $('#spells').addEventListener('click', toggleSpells);
   }
 })();
 
-window.__fx = { ids: EFFECTS.map((e) => e.id), meta: EFFECTS.map((e) => ({ id: e.id, name: e.name, emoji: e.emoji, gesture: e.gesture, make: typeof e.make === 'function' })), fire: (id, from) => fire(typeof id === 'string' ? EFFECTS.find((e) => e.id === id) : id, from || null), make: (id) => EFFECTS.find((e) => e.id === id).make(env), toggleRec, history: recall, get span() { return env.historySpan; }, get shown() { return !!shown; }, get active() { return active.map((e) => e.def.id); }, get face() { return face; }, get mixed() { return recMixed; }, get gestures() { return { on: spellsOn, ready: handReady, gesture: spell.g, hand, castAt: { ...castAt } }; } };
+window.__fx = { ids: EFFECTS.map((e) => e.id), meta: EFFECTS.map((e) => ({ id: e.id, name: e.name, emoji: e.emoji, gesture: e.gesture, make: typeof e.make === 'function' })), fire: (id, from) => fire(typeof id === 'string' ? EFFECTS.find((e) => e.id === id) : id, from || null), make: (id, hand) => EFFECTS.find((e) => e.id === id).make(env, hand || null), toggleRec, history: recall, get span() { return env.historySpan; }, get shown() { return !!shown; }, get active() { return active.map((e) => e.def.id); }, get face() { return face; }, get mixed() { return recMixed; }, get gestures() { return { on: spellsOn, ready: handReady, gesture: caster.gestureOf(primary), hand: env.hand, hands: env.hands, castAt: { ...caster.castAt }, log: caster.log.slice() }; } };

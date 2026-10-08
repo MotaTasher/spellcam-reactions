@@ -1,6 +1,7 @@
 // Проверка реакций: каждая запускается на мультяшном лице, не должна ронять
 // страницу, должна закончиться за 15 секунд и не тормозить кадр. Реакция с жестом
-// запускается ещё раз так, будто её вызвали рукой (make(env, hand)).
+// запускается ещё раз так, будто её вызвали рукой (make(env, hand)), — по разу на каждый
+// свой жест; для стука кулаком (Knock) рука приходит с номером удара в серии.
 // Плюс движок прошлых кадров: env.history, хук source и реакции со временем,
 // нажатые до того, как камера успела что-то запомнить.
 //   python3 server.py &   и   CHROME=/путь/к/chrome node tools/check.mjs [id …]
@@ -9,7 +10,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 
 const chrome = process.env.CHROME;
 const url = (process.env.URL || 'http://127.0.0.1:8765/') + '?out=checkroom&nogestures&video=docs/demo/cartoon.webm';
-const GESTURES = ['Thumb_Up', 'Thumb_Down', 'Closed_Fist', 'Open_Palm', 'Victory', 'Pointing_Up', 'ILoveYou'];
+const GESTURES = ['Thumb_Up', 'Thumb_Down', 'Closed_Fist', 'Open_Palm', 'Victory', 'Pointing_Up', 'ILoveYou', 'Knock', 'Heart'];
+const gesturesOf = (m) => [].concat(m.gesture ?? []);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failed = 0;
 const fail = (msg) => { failed++; console.log('✗', msg); };
@@ -34,10 +36,10 @@ const ids = process.argv.slice(2).length ? process.argv.slice(2) : meta.map((m) 
 const seen = new Set();
 const spells = new Map();
 for (const m of meta) {
-  if (m.gesture !== undefined) {
-    if (!GESTURES.includes(m.gesture)) fail(`«${m.id}»: gesture «${m.gesture}» — такого жеста нет, есть: ${GESTURES.join(', ')}`);
-    else if (spells.has(m.gesture)) fail(`«${m.id}»: жест ${m.gesture} уже у реакции «${spells.get(m.gesture)}»`);
-    else spells.set(m.gesture, m.id);
+  for (const g of gesturesOf(m)) {
+    if (!GESTURES.includes(g)) fail(`«${m.id}»: gesture «${g}» — такого жеста нет, есть: ${GESTURES.join(', ')}`);
+    else if (spells.has(g)) fail(`«${m.id}»: жест ${g} уже у реакции «${spells.get(g)}»`);
+    else spells.set(g, m.id);
   }
   if (seen.has(m.id)) fail(`повторяется id «${m.id}»`);
   seen.add(m.id);
@@ -48,7 +50,7 @@ for (const m of meta) {
 
 const play = (id, gesture) => page.evaluate(async (id, gesture) => {
   const C = document.querySelector('#out').width;
-  const hand = gesture && { x: C * 0.7, y: C * 0.68, size: C * 0.2, gesture, wrist: { x: C * 0.72, y: C * 0.84 } };
+  const hand = gesture && { x: C * 0.7, y: C * 0.68, size: C * 0.2, gesture, wrist: { x: C * 0.72, y: C * 0.84 }, ...(gesture === 'Knock' ? { knock: 4 } : {}) };
   const t0 = performance.now();
   window.__fx.fire(id, hand);
   let frames = 0, worst = 0, last = performance.now();
@@ -70,8 +72,9 @@ for (const id of ids) {
   if (errors.length) fail(`«${id}»: ошибка на странице: ${errors[0]}`);
   else if (r.still) fail(`«${id}»: не закончилась за 15 секунд (done так и не стал true)`);
   else console.log(`✓ ${id}: ${r.secs.toFixed(1)} с, ${r.fps.toFixed(0)} fps, худший кадр ${r.worst.toFixed(0)} мс`);
-  const s = await page.evaluate(async (id) => {
-    const inst = window.__fx.make(id);
+  const sound = (gesture) => page.evaluate(async (id, gesture) => {
+    const C = document.querySelector('#out').width;
+    const inst = window.__fx.make(id, gesture === 'Knock' ? { x: C * 0.7, y: C * 0.68, size: C * 0.2, gesture, wrist: { x: C * 0.72, y: C * 0.84 }, knock: 5 } : null);
     if (!inst.sound) return null;
     const rate = 44100, ac = new OfflineAudioContext(1, rate * 8, rate);
     try { inst.sound({ ac, out: ac.destination }); } catch (e) { return { error: String(e) }; }
@@ -80,19 +83,23 @@ for (const id of ids) {
     let peak = 0, last = 0;
     for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > peak) peak = v; if (v > 0.002) last = i; }
     return { peak, secs: last / rate };
-  }, id);
-  if (s && s.error) fail(`«${id}»: звук падает: ${s.error}`);
-  else if (s && s.secs < 0.05) fail(`«${id}»: звук есть, но тишина`);
-  else if (s && s.secs > 6) fail(`«${id}»: звук длиннее 6 секунд (${s.secs.toFixed(1)} с)`);
-  else if (s && s.peak > 1) fail(`«${id}»: звук клиппует (пик ${s.peak.toFixed(2)})`);
-  else if (s) console.log(`  ♪ ${s.secs.toFixed(1)} с, пик ${s.peak.toFixed(2)}`);
-  const gesture = meta.find((m) => m.id === id).gesture;
-  if (gesture) {
+  }, id, gesture);
+  const gestures = gesturesOf(meta.find((m) => m.id === id));
+  for (const g of [null, ...gestures.filter((g) => g === 'Knock')]) {
+    const s = await sound(g);
+    const who = g ? `«${id}» от ${g}` : `«${id}»`;
+    if (s && s.error) fail(`${who}: звук падает: ${s.error}`);
+    else if (s && s.secs < 0.05) fail(`${who}: звук есть, но тишина`);
+    else if (s && s.secs > 6) fail(`${who}: звук длиннее 6 секунд (${s.secs.toFixed(1)} с)`);
+    else if (s && s.peak > 1) fail(`${who}: звук клиппует (пик ${s.peak.toFixed(2)})`);
+    else if (s) console.log(`  ♪${g ? ' ' + g : ''} ${s.secs.toFixed(1)} с, пик ${s.peak.toFixed(2)}`);
+  }
+  for (const gesture of gestures) {
     await sleep(300);
     errors.length = 0;
     const h = await play(id, gesture);
-    if (errors.length) fail(`«${id}» от жеста: ошибка на странице: ${errors[0]}`);
-    else if (h.still) fail(`«${id}» от жеста: не закончилась за 15 секунд`);
+    if (errors.length) fail(`«${id}» от жеста ${gesture}: ошибка на странице: ${errors[0]}`);
+    else if (h.still) fail(`«${id}» от жеста ${gesture}: не закончилась за 15 секунд`);
     else console.log(`  ${gesture}: ${h.secs.toFixed(1)} с, ${h.fps.toFixed(0)} fps, худший кадр ${h.worst.toFixed(0)} мс`);
   }
   await sleep(300);

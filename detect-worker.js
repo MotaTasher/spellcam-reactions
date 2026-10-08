@@ -76,7 +76,7 @@ async function ensureHands() {
     hands = await create(GestureRecognizer, {
       baseOptions: { modelAssetPath: await handsModel() },
       runningMode: 'VIDEO',
-      numHands: 1,
+      numHands: 2,
     }, handsGpu);
   } catch (err) {
     handsOff = true;
@@ -86,27 +86,38 @@ async function ensureHands() {
   handsLoading = false;
 }
 
+function spread(pts) {
+  let mx = 0, my = 0, v = 0;
+  for (const p of pts) { mx += p.x; my += p.y; }
+  mx /= pts.length; my /= pts.length;
+  for (const p of pts) v += (p.x - mx) ** 2 + (p.y - my) ** 2;
+  return Math.sqrt(v / pts.length);
+}
+
 function findHand(bmp, ts) {
   ensureHands();
   if (!hands) return;
-  const out = { type: 'hand', hand: null };
+  const out = { type: 'hand', hands: [] };
   const t0 = performance.now();
   try {
     const r = hands.recognizeForVideo(bmp, ts);
-    const lm = r.landmarks && r.landmarks[0];
-    if (lm && lm.length === 21) {
+    (r.landmarks || []).forEach((lm, i) => {
+      if (lm.length !== 21) return;
       let top = { categoryName: 'None', score: 0 };
-      for (const c of (r.gestures && r.gestures[0]) || []) if (c.score > top.score) top = c;
+      for (const c of (r.gestures && r.gestures[i]) || []) if (c.score > top.score) top = c;
       const xs = lm.map((p) => p.x), ys = lm.map((p) => p.y);
       const palm = [0, 5, 9, 13, 17];
-      out.hand = {
+      const wl = r.worldLandmarks && r.worldLandmarks[i];
+      out.hands.push({
         g: top.categoryName || 'None',
         s: top.score,
-        c: [palm.reduce((a, i) => a + xs[i], 0) / 5, palm.reduce((a, i) => a + ys[i], 0) / 5],
+        c: [palm.reduce((a, j) => a + xs[j], 0) / 5, palm.reduce((a, j) => a + ys[j], 0) / 5],
         w: [xs[0], ys[0]],
         b: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
-      };
-    }
+        z: wl && wl.length === 21 ? spread(lm) / spread(wl) : spread(lm),
+        k: [xs[4], ys[4], xs[6], ys[6], xs[8], ys[8], xs[9], ys[9]],
+      });
+    });
   } catch (err) {
     try { hands.close(); } catch (e) {}
     hands = null;
@@ -176,6 +187,9 @@ self.onmessage = async (e) => {
     out.error = String(err);
   }
   self.postMessage(out, transfer);
-  if (m.hand) findHand(bmp, ts);
   bmp.close();
+  if (m.hands) {
+    findHand(m.hands, ts);
+    m.hands.close();
+  }
 };
