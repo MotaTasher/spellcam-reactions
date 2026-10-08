@@ -10,7 +10,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 
 const chrome = process.env.CHROME;
 const url = (process.env.URL || 'http://127.0.0.1:8765/') + '?out=checkroom&nogestures&video=docs/demo/cartoon.webm';
-const GESTURES = ['Thumb_Up', 'Thumb_Down', 'Closed_Fist', 'Open_Palm', 'Victory', 'Pointing_Up', 'ILoveYou', 'Knock', 'Heart'];
+const GESTURES = ['Thumb_Up', 'Thumb_Down', 'Closed_Fist', 'Open_Palm', 'Victory', 'Pointing_Up', 'ILoveYou', 'Knock', 'Heart', 'FingerHeart'];
 const gesturesOf = (m) => [].concat(m.gesture ?? []);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failed = 0;

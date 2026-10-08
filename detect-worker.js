@@ -116,6 +116,7 @@ function findHand(bmp, ts) {
         b: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
         z: wl && wl.length === 21 ? spread(lm) / spread(wl) : spread(lm),
         k: [xs[4], ys[4], xs[6], ys[6], xs[8], ys[8], xs[9], ys[9]],
+        f: wl && wl.length === 21 ? wl.flatMap((p) => [Math.round(p.x * 1000), Math.round(p.y * 1000), Math.round(p.z * 1000)]) : null,
       });
     });
   } catch (err) {

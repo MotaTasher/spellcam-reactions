@@ -1,10 +1,12 @@
-export const SPELLS = ['Thumb_Up', 'Thumb_Down', 'Closed_Fist', 'Open_Palm', 'Victory', 'Pointing_Up', 'ILoveYou', 'Knock', 'Heart'];
+export const SPELLS = ['Thumb_Up', 'Thumb_Down', 'Closed_Fist', 'Open_Palm', 'Victory', 'Pointing_Up', 'ILoveYou', 'Knock', 'Heart', 'FingerHeart'];
 
 export const TUNE = {
   enter: 0.65, keep: 0.5, strong: 0.8, lose: 250, hold: 260, cooldown: 2000, still: 200, calm: { z: 0.045, xy: 0.12 },
-  guard: { Open_Palm: { enter: 0.8, hold: 450 }, ILoveYou: { enter: 0.8, hold: 450 } },
+  guard: { Open_Palm: { enter: 0.8, hold: 450 }, ILoveYou: { enter: 0.8, hold: 450 }, FingerHeart: { enter: 0.5, hold: 100 } },
+  same: { FingerHeart: 'Heart' },
   knock: { rise: 0.12, riseMs: 320, peakMs: 450, fall: 0.3, fallMin: 0.04, fallMs: 260, gap: 1200, drift: 1.5, block: 400, lift: 0.05, settle: 150 },
   heart: { index: 0.7, thumb: 1.1, axis: 0.45, tilt: 0.6, side: 0.3, curl: -0.15, near: 1.3, hold: 60, lose: 200 },
+  finger: { ring: 0.9, curl: 0.92, middle: 1.25, index: 0.42, straight: 1.3, touch: 0.65, tip: 0.75, other: 0.65, frames: 2 },
 };
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -38,6 +40,39 @@ export function heartOf(a, b, T = TUNE.heart) {
   const curl = (h) => ((h.index.x - h.pip.x) * ux + (h.index.y - h.pip.y) * uy) / len;
   if (curl(a) < T.curl * S || curl(b) < T.curl * S) return null;
   return { x: top.x + ux * 0.45, y: top.y + uy * 0.45, size: dist(a, b) * 0.5, gesture: 'Heart', wrist: mid(a.wrist, b.wrist) };
+}
+
+const d3 = (w, i, j) => Math.hypot(w[3 * i] - w[3 * j], w[3 * i + 1] - w[3 * j + 1], w[3 * i + 2] - w[3 * j + 2]);
+
+function seg3(w, p, a, b) {
+  const ax = w[3 * b] - w[3 * a], ay = w[3 * b + 1] - w[3 * a + 1], az = w[3 * b + 2] - w[3 * a + 2];
+  const px = w[3 * p] - w[3 * a], py = w[3 * p + 1] - w[3 * a + 1], pz = w[3 * p + 2] - w[3 * a + 2];
+  const L = ax * ax + ay * ay + az * az;
+  const t = L > 0 ? Math.max(0, Math.min(1, (px * ax + py * ay + pz * az) / L)) : 0;
+  return Math.hypot(px - ax * t, py - ay * t, pz - az * t);
+}
+
+export function fingerHeartScore(w) {
+  if (!w || w.length < 63) return null;
+  const S = (d3(w, 0, 5) + d3(w, 0, 17) + d3(w, 5, 17)) / 3;
+  if (!(S > 0)) return null;
+  const curl = (tip, pip) => d3(w, tip, 0) / Math.max(d3(w, pip, 0), 1e-6);
+  return {
+    middle: curl(12, 10), ring: curl(16, 14), pinky: curl(20, 18),
+    index: d3(w, 8, 5) / S, straight: curl(8, 6),
+    touch: Math.min(seg3(w, 4, 6, 7), seg3(w, 4, 7, 8)) / S,
+    tip: d3(w, 4, 8) / Math.max(d3(w, 4, 7), 1e-6),
+  };
+}
+
+export function fingerHeartOf(o, T = TUNE.finger) {
+  if (!o || !o.thumb || !o.index) return null;
+  if (o.g && o.g !== 'None' && o.s >= T.other) return null;
+  const f = fingerHeartScore(o.world);
+  if (!f) return null;
+  if (Math.max(f.ring, f.pinky) > T.ring || f.middle + f.ring + f.pinky > 3 * T.curl || f.middle > T.middle) return null;
+  if (f.index < T.index || f.straight > T.straight || f.touch > T.touch || f.tip < T.tip) return null;
+  return { x: (o.thumb.x + o.index.x) / 2, y: (o.thumb.y + o.index.y) / 2 };
 }
 
 export function createKnock(T = TUNE.knock) {
@@ -87,7 +122,8 @@ export function createSpells(T = TUNE) {
 
   const fresh = (now) => ({ g: 'None', since: now, seen: now, strong: 0, cast: false });
   const view = (t) => ({ id: t.id, x: t.o.x, y: t.o.y, size: t.o.size, gesture: t.o.g, wrist: { ...t.o.wrist } });
-  const cool = (spell, now) => now - (castAt[spell] ?? -1e9) >= T.cooldown;
+  const key = (spell) => (T.same && T.same[spell]) || spell;
+  const cool = (spell, now) => now - (castAt[key(spell)] ?? -1e9) >= T.cooldown;
 
   function dedupe(seen) {
     const out = [];
@@ -132,11 +168,12 @@ export function createSpells(T = TUNE) {
     const st = t.st, guard = T.guard[st.g];
     if (st.g === 'None' || st.cast || st.seen !== now || !cool(st.g, now)) return false;
     if (st.g === 'Closed_Fist' && t.knock.busy(now)) return false;
+    if (st.g === 'FingerHeart') return t.fh >= T.finger.frames && now - st.since >= guard.hold && still(t, now);
     return now - st.since >= (guard ? guard.hold : T.hold) || (!guard && st.strong >= 2 && still(t, now));
   }
 
   function cast(out, spell, now, id, hand) {
-    castAt[spell] = now;
+    castAt[key(spell)] = now;
     log.push({ spell, t: now, id });
     if (log.length > 30) log.shift();
     out.push({ spell, id, hand });
@@ -148,7 +185,10 @@ export function createSpells(T = TUNE) {
     const live = tracks.filter((t) => t.seen === now);
     const out = [];
     for (const t of tracks) {
-      if (t.seen !== now) { trigger(t, 'None', 0, now); continue; }
+      if (t.seen !== now) { t.fh = 0; trigger(t, 'None', 0, now); continue; }
+      const tip = fingerHeartOf(t.o, T.finger);
+      t.fh = tip ? (t.fh || 0) + 1 : 0;
+      if (tip) t.o = { ...t.o, g: 'FingerHeart', s: 1, tip };
       trigger(t, t.o.g, t.o.s, now);
       const fist = (t.o.g === 'Closed_Fist' && t.o.s >= T.keep) || t.st.g === 'Closed_Fist';
       t.knock.push({ t: now, z: Math.log(t.o.z || t.o.size || 1), x: t.o.x, y: t.o.y, size: t.o.size, fist });
@@ -179,7 +219,8 @@ export function createSpells(T = TUNE) {
       if (near || heart.on || !ready(t, now)) continue;
       const g = t.st.g;
       for (const q of tracks) if (q.st.g === g) q.st.cast = true;
-      cast(out, g, now, t.id, view(t));
+      const v = view(t);
+      cast(out, g, now, t.id, g === 'FingerHeart' && t.o.tip ? { ...v, x: t.o.tip.x, y: t.o.tip.y, size: v.size * 0.5 } : v);
     }
     return { hands: tracks.map(view), casts: out };
   }

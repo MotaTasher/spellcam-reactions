@@ -2,7 +2,7 @@ import { EFFECTS } from './effects/index.js';
 import { createSpells } from './spells.js';
 
 const CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/';
-const GESTURES = { Thumb_Up: '👍', Thumb_Down: '👎', Closed_Fist: '✊', Open_Palm: '✋', Victory: '✌️', Pointing_Up: '☝️', ILoveYou: '🤟', Knock: '✊', Heart: '🫶' };
+const GESTURES = { Thumb_Up: '👍', Thumb_Down: '👎', Closed_Fist: '✊', Open_Palm: '✋', Victory: '✌️', Pointing_Up: '☝️', ILoveYou: '🤟', Knock: '✊', Heart: '🫶', FingerHeart: '🫰' };
 const gesturesOf = (e) => [].concat(e.gesture || []);
 const SPELLS = new Map();
 for (const e of EFFECTS) for (const g of gesturesOf(e)) if (GESTURES[g] && !SPELLS.has(g)) SPELLS.set(g, e);
@@ -348,7 +348,7 @@ function onHand(list) {
   handReady = true;
   const seen = list.map((h) => {
     const a = hpt(h.b[0], h.b[1]), b = hpt(h.b[2], h.b[3]), k = h.k;
-    return { g: h.g, s: h.s, ...hpt(h.c[0], h.c[1]), size: Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)), z: h.z, wrist: hpt(h.w[0], h.w[1]), thumb: hpt(k[0], k[1]), pip: hpt(k[2], k[3]), index: hpt(k[4], k[5]), mcp: hpt(k[6], k[7]) };
+    return { g: h.g, s: h.s, ...hpt(h.c[0], h.c[1]), size: Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)), z: h.z, wrist: hpt(h.w[0], h.w[1]), thumb: hpt(k[0], k[1]), pip: hpt(k[2], k[3]), index: hpt(k[4], k[5]), mcp: hpt(k[6], k[7]), world: h.f || null };
   });
   const { hands, casts } = caster.step(performance.now(), seen);
   handTargets = hands;
@@ -608,13 +608,39 @@ function syncButtons() {
 
 const KEYS = '1234567890qwertyuiopasdfghjkl';
 
+const drawn = new Map();
+function canDraw(e) {
+  if (!drawn.has(e)) {
+    let ok = true;
+    try {
+      const c = document.createElement('canvas');
+      c.width = c.height = 24;
+      const g = c.getContext('2d', { willReadFrequently: true });
+      g.font = '20px sans-serif';
+      g.textBaseline = 'top';
+      g.fillStyle = '#000';
+      g.fillText(e, 0, 0);
+      const d = g.getImageData(0, 0, 24, 24).data;
+      ok = false;
+      for (let i = 0; i < d.length && !ok; i += 4) ok = d[i + 3] > 0 && (d[i] !== d[i + 1] || d[i + 1] !== d[i + 2]);
+    } catch (err) { ok = true; }
+    drawn.set(e, ok);
+  }
+  return drawn.get(e);
+}
+
+function glyphOf(def) {
+  const all = gesturesOf(def).map((g) => GESTURES[g]).filter(Boolean);
+  return all.find(canDraw) || all[0];
+}
+
 function buildButtons() {
   const bar = $('#fx');
   EFFECTS.forEach((def, i) => {
     const b = document.createElement('button');
     b.className = 'fx';
     b.dataset.id = def.id;
-    const g = GESTURES[gesturesOf(def)[0]];
+    const g = glyphOf(def);
     b.innerHTML = `<span class="e">${def.emoji}</span><span class="n">${def.name}</span><kbd>${KEYS[i] || ''}</kbd>${g ? `<i class="g">${g}</i>` : ''}`;
     b.addEventListener('pointerdown', (ev) => { ev.preventDefault(); wakeAudio(); fire(def); });
     bar.appendChild(b);
