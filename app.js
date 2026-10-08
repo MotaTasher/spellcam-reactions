@@ -353,10 +353,10 @@ function onHand(h) {
 
 function cast(g, s, now) {
   if (g !== 'None' && g === spell.g && s >= 0.5) spell.seen = now;
-  else if (g !== 'None' && s >= 0.65) Object.assign(spell, { g, since: now, seen: now, cast: false });
+  else if (g !== 'None' && s >= (g === 'Open_Palm' ? 0.8 : 0.65)) Object.assign(spell, { g, since: now, seen: now, cast: false });
   else if (now - spell.seen > 250) Object.assign(spell, { g: 'None', since: now, seen: now, cast: false });
   const def = SPELLS.get(spell.g);
-  if (!def || !handTarget || spell.cast || spell.seen !== now || now - spell.since < 260 || now - (castAt[spell.g] || -1e9) < 2000) return;
+  if (!def || !handTarget || spell.cast || spell.seen !== now || now - spell.since < (spell.g === 'Open_Palm' ? 450 : 260) || now - (castAt[spell.g] || -1e9) < 2000) return;
   spell.cast = true;
   castAt[spell.g] = now;
   fire(def, { ...handTarget, wrist: { ...handTarget.wrist } });
