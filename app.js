@@ -1,6 +1,9 @@
 import { EFFECTS } from './effects/index.js';
 
 const CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/';
+const GESTURES = { Thumb_Up: '👍', Thumb_Down: '👎', Closed_Fist: '✊', Open_Palm: '✋', Victory: '✌️', Pointing_Up: '☝️', ILoveYou: '🤟' };
+const SPELLS = new Map();
+for (const e of EFFECTS) if (GESTURES[e.gesture] && !SPELLS.has(e.gesture)) SPELLS.set(e.gesture, e);
 
 async function loadVision(base) {
   for (const root of [new URL('vendor/mediapipe/', base).href, CDN]) {
@@ -52,6 +55,11 @@ let segLoading = false;
 let face = null;
 let faceTarget = null;
 let faceMiss = 0;
+let hand = null;
+let handTarget = null;
+let handMiss = 0;
+let handReady = false;
+let lastHandAt = 0;
 let lastSegAt = 0;
 let buttonsKey = '';
 let maskReady = false;
@@ -131,6 +139,7 @@ function pickSource() {
 const env = {
   C,
   get face() { return (shown && shown.face) || face; },
+  get hand() { return hand; },
   get mask() { return maskReady ? maskCanvas : null; },
   frame,
   layer: (i) => layers[i],
@@ -140,6 +149,12 @@ const env = {
 };
 
 const params = new URLSearchParams(location.search);
+
+function loadSpells() {
+  if (params.has('nogestures')) return false;
+  try { return localStorage.getItem('spellcam.gestures') !== '0'; } catch (e) { return true; }
+}
+let spellsOn = loadSpells();
 
 async function startCamera() {
   const src = params.get('video');
@@ -180,6 +195,7 @@ async function flipCamera() {
     mirror = facing === 'user';
     face = null;
     faceTarget = null;
+    hand = handTarget = null;
     lastVideoTime = -1;
   } catch (e) {
     facing = prev;
@@ -220,6 +236,12 @@ function startWorker() {
 function onWorker(e) {
   const m = e.data;
   if (m.type === 'warn') { console.warn('worker:', m.error); return; }
+  if (m.type === 'hand') {
+    if (m.off) noSpells();
+    else onHand(m.hand);
+    if (m.handMs !== undefined) perf.hand = perf.hand * 0.8 + m.handMs * 0.2;
+    return;
+  }
   workerBusy = false;
   if (m.faceMs !== undefined) perf.face = perf.face * 0.8 + m.faceMs * 0.2;
   if (m.segMs !== undefined) perf.seg = perf.seg * 0.8 + m.segMs * 0.2;
@@ -237,9 +259,11 @@ function sendFrame(now, needMask) {
   if (!worker || !workerReady || workerBusy) return;
   workerBusy = true;
   const w = Math.min(480, crop.vw), h = Math.round((w * crop.vh) / crop.vw);
+  const withHand = spellsOn && now - lastHandAt >= 125;
+  if (withHand) lastHandAt = now;
   createImageBitmap(video, { resizeWidth: w, resizeHeight: h, resizeQuality: 'low' })
     .catch(() => createImageBitmap(video))
-    .then((bitmap) => worker.postMessage({ type: 'frame', bitmap, ts: now, face: true, seg: needMask }, [bitmap]))
+    .then((bitmap) => worker.postMessage({ type: 'frame', bitmap, ts: now, face: true, seg: needMask, hand: withHand }, [bitmap]))
     .catch(() => { workerBusy = false; });
 }
 
@@ -308,6 +332,73 @@ function followFace(dt) {
   for (const key of ['x', 'y', 'w', 'h']) face.box[key] += (faceTarget.box[key] - face.box[key]) * k;
 }
 
+const vpt = ([x, y]) => mapPt(x * crop.vw, y * crop.vh);
+const spell = { g: 'None', since: 0, seen: 0, cast: false };
+const castAt = {};
+
+function onHand(h) {
+  if (!spellsOn) return;
+  handReady = true;
+  const c = h && vpt(h.c);
+  if (c && c.x > -C * 0.05 && c.x < C * 1.05 && c.y > -C * 0.05 && c.y < C * 1.05) {
+    const a = vpt(h.b), b = vpt(h.b.slice(2));
+    handTarget = { x: c.x, y: c.y, size: Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)), gesture: h.g, wrist: vpt(h.w) };
+    handMiss = 0;
+    cast(h.g, h.s, performance.now());
+  } else {
+    if (++handMiss > 2) handTarget = null;
+    cast('None', 0, performance.now());
+  }
+}
+
+function cast(g, s, now) {
+  if (g !== 'None' && g === spell.g && s >= 0.5) spell.seen = now;
+  else if (g !== 'None' && s >= 0.65) Object.assign(spell, { g, since: now, seen: now, cast: false });
+  else if (now - spell.seen > 250) Object.assign(spell, { g: 'None', since: now, seen: now, cast: false });
+  const def = SPELLS.get(spell.g);
+  if (!def || !handTarget || spell.cast || spell.seen !== now || now - spell.since < 260 || now - (castAt[spell.g] || -1e9) < 2000) return;
+  spell.cast = true;
+  castAt[spell.g] = now;
+  fire(def, { ...handTarget, wrist: { ...handTarget.wrist } });
+}
+
+function followHand(dt) {
+  if (!handTarget) { hand = null; return; }
+  if (!hand) { hand = { ...handTarget, wrist: { ...handTarget.wrist } }; return; }
+  const k = 1 - Math.exp(-dt * 14);
+  for (const key of ['x', 'y', 'size']) hand[key] += (handTarget[key] - hand[key]) * k;
+  hand.wrist.x += (handTarget.wrist.x - hand.wrist.x) * k;
+  hand.wrist.y += (handTarget.wrist.y - hand.wrist.y) * k;
+  hand.gesture = handTarget.gesture;
+}
+
+function showSpells() {
+  document.body.classList.toggle('nospells', !spellsOn);
+  $('#spells').setAttribute('aria-pressed', String(spellsOn));
+}
+
+function toggleSpells() {
+  spellsOn = !spellsOn;
+  if (!spellsOn) { hand = handTarget = null; Object.assign(spell, { g: 'None', cast: false }); }
+  try { localStorage.setItem('spellcam.gestures', spellsOn ? '1' : '0'); } catch (e) {}
+  showSpells();
+  flash(spellsOn ? 'Жесты включены' : 'Жесты выключены');
+}
+
+function noSpells() {
+  spellsOn = false;
+  hand = handTarget = null;
+  showSpells();
+  $('#spells').hidden = true;
+}
+
+let flashTimer = 0;
+function flash(txt) {
+  status(txt);
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { if ($('#status').textContent === txt) status(''); }, 1500);
+}
+
 function segment(ts) {
   if (!segmenter) return;
   const sw = 256, sh = Math.round((256 * crop.vh) / crop.vw);
@@ -341,7 +432,7 @@ function applyMask(arr, w, h) {
   maskReady = true;
 }
 
-const perf = { face: 0, seg: 0, fps: 0, det: 0, detRate: 0, detAt: performance.now() };
+const perf = { face: 0, seg: 0, hand: 0, fps: 0, det: 0, detRate: 0, detAt: performance.now() };
 const hud = params.has('debug') ? document.createElement('div') : null;
 if (hud) {
   hud.style.cssText = 'position:fixed;left:8px;top:8px;z-index:20;font:12px/1.3 ui-monospace,Menlo,monospace;color:#0f0;background:rgba(0,0,0,.6);padding:4px 6px;border-radius:6px;pointer-events:none;white-space:pre';
@@ -350,7 +441,7 @@ if (hud) {
 function drawHud(dt, now) {
   perf.fps = perf.fps * 0.9 + (dt > 0 ? 1 / dt : 0) * 0.1;
   if (now - perf.detAt > 1000) { perf.detRate = (perf.det * 1000) / (now - perf.detAt); perf.det = 0; perf.detAt = now; }
-  hud.textContent = `${perf.fps.toFixed(0)} fps  C=${C}  ${worker ? 'worker' : 'main'}\nface ${perf.face.toFixed(1)} ms  seg ${perf.seg.toFixed(1)} ms  det ${perf.detRate.toFixed(0)}/s\ncam ${video.videoWidth}x${video.videoHeight}  fx ${active.length}`;
+  hud.textContent = `${perf.fps.toFixed(0)} fps  C=${C}  ${worker ? 'worker' : 'main'}\nface ${perf.face.toFixed(1)} ms  seg ${perf.seg.toFixed(1)} ms  hand ${perf.hand.toFixed(1)} ms  det ${perf.detRate.toFixed(0)}/s\ncam ${video.videoWidth}x${video.videoHeight}  fx ${active.length}`;
 }
 window.__perf = perf;
 
@@ -391,6 +482,7 @@ function loop(now) {
     }
   }
   followFace(dt);
+  followHand(dt);
   if (camReadyAt) remember();
   for (const e of active) e.inst.update(dt, env);
   active = active.filter((e) => !e.inst.done);
@@ -485,8 +577,8 @@ function wireMic() {
   return true;
 }
 
-function fire(def) {
-  const inst = def.make(env);
+function fire(def, from = null) {
+  const inst = def.make(env, from);
   active.push({ def, inst });
   if (!inst.sound) return;
   const a = ensureAudio();
@@ -510,7 +602,8 @@ function buildButtons() {
     const b = document.createElement('button');
     b.className = 'fx';
     b.dataset.id = def.id;
-    b.innerHTML = `<span class="e">${def.emoji}</span><span class="n">${def.name}</span><kbd>${KEYS[i] || ''}</kbd>`;
+    const g = GESTURES[def.gesture];
+    b.innerHTML = `<span class="e">${def.emoji}</span><span class="n">${def.name}</span><kbd>${KEYS[i] || ''}</kbd>${g ? `<i class="g">${g}</i>` : ''}`;
     b.addEventListener('pointerdown', (ev) => { ev.preventDefault(); wakeAudio(); fire(def); });
     bar.appendChild(b);
   });
@@ -638,10 +731,12 @@ recBtn.addEventListener('pointerup', releaseRec);
 recBtn.addEventListener('pointercancel', releaseRec);
 recBtn.addEventListener('contextmenu', (ev) => ev.preventDefault());
 $('#flip').addEventListener('click', flipCamera);
+$('#spells').addEventListener('click', toggleSpells);
 
 
 (async () => {
   buildButtons();
+  showSpells();
   if (params.has('out')) document.body.classList.add('out');
   setRing(0);
   requestAnimationFrame(loop);
@@ -659,6 +754,7 @@ $('#flip').addEventListener('click', flipCamera);
     status('');
   } catch (e) {
     console.warn('worker fallback:', e && e.message);
+    noSpells();
     try {
       await loadModels();
       status('');
@@ -669,4 +765,4 @@ $('#flip').addEventListener('click', flipCamera);
   }
 })();
 
-window.__fx = { ids: EFFECTS.map((e) => e.id), meta: EFFECTS.map((e) => ({ id: e.id, name: e.name, emoji: e.emoji, make: typeof e.make === 'function' })), fire: (id) => fire(typeof id === 'string' ? EFFECTS.find((e) => e.id === id) : id), make: (id) => EFFECTS.find((e) => e.id === id).make(env), toggleRec, history: recall, get span() { return env.historySpan; }, get shown() { return !!shown; }, get active() { return active.map((e) => e.def.id); }, get face() { return face; }, get mixed() { return recMixed; } };
+window.__fx = { ids: EFFECTS.map((e) => e.id), meta: EFFECTS.map((e) => ({ id: e.id, name: e.name, emoji: e.emoji, gesture: e.gesture, make: typeof e.make === 'function' })), fire: (id, from) => fire(typeof id === 'string' ? EFFECTS.find((e) => e.id === id) : id, from || null), make: (id) => EFFECTS.find((e) => e.id === id).make(env), toggleRec, history: recall, get span() { return env.historySpan; }, get shown() { return !!shown; }, get active() { return active.map((e) => e.def.id); }, get face() { return face; }, get mixed() { return recMixed; }, get gestures() { return { on: spellsOn, ready: handReady, gesture: spell.g, hand, castAt: { ...castAt } }; } };

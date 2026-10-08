@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const chrome = process.env.CHROME;
-const url = (process.env.URL || 'http://127.0.0.1:8765/') + '?out=soundroom&video=docs/demo/cartoon.webm';
+const url = (process.env.URL || 'http://127.0.0.1:8765/') + '?out=soundroom&nogestures&video=docs/demo/cartoon.webm';
 const [outDir = 'screenshots/sounds', ...only] = process.argv.slice(2);
 mkdirSync(outDir, { recursive: true });
 

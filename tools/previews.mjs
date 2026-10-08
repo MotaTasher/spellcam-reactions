@@ -8,7 +8,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
 const chrome = process.env.CHROME;
-const url = (process.env.URL || 'http://127.0.0.1:8765/') + '?out=previewroom&video=docs/demo/cartoon.webm';
+const url = (process.env.URL || 'http://127.0.0.1:8765/') + '?out=previewroom&nogestures&video=docs/demo/cartoon.webm';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const browser = await puppeteer.launch({ executablePath: chrome, headless: true, args: ['--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required', ...(process.env.CI ? ['--no-sandbox'] : [])] });
 const page = await browser.newPage();

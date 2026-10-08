@@ -73,4 +73,4 @@ function roll(env) {
   };
 }
 
-export default { id: 'drumroll', face: true, name: 'Та-дам', emoji: '🥁', make: roll };
+export default { id: 'drumroll', face: true, name: 'Та-дам', emoji: '🥁', gesture: 'Pointing_Up', make: roll };

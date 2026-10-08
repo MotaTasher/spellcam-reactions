@@ -73,4 +73,4 @@ function yes(env) {
   };
 }
 
-export default { id: 'yes', face: true, name: 'Да!', emoji: '✅', make: yes };
+export default { id: 'yes', face: true, name: 'Да!', emoji: '✅', gesture: 'Thumb_Up', make: yes };

@@ -1,18 +1,20 @@
 import { TAU, rand, pick, clamp, easeOutBack, easeOutCubic, faceOrDefault } from './lib.js';
 import { boom } from './sfx.js';
 
-function bam(env) {
+function bam(env, hand) {
   const C = env.C;
   const f = faceOrDefault(env);
-  const cx = f.box.x + f.box.w / 2;
-  const cy = clamp(f.box.y + f.box.h * 1.05, C * 0.3, C * 0.75);
+  const ox = hand ? hand.x : f.box.x + f.box.w / 2;
+  const oy = hand ? hand.y : clamp(f.box.y + f.box.h * 1.05, C * 0.3, C * 0.75);
+  const cx = hand ? clamp(ox, C * 0.38, C * 0.62) : ox;
+  const cy = hand ? clamp(oy, C * 0.32, C * 0.68) : oy;
   let t = 0;
   const dur = 2.1;
   const spikes = Array.from({ length: 28 }, (_, i) => (i % 2 ? rand(0.55, 0.68) : rand(0.92, 1.08)));
   const lines = Array.from({ length: 46 }, () => ({ a: rand(0, TAU), r0: rand(0.32, 0.5), w: rand(0.004, 0.012) }));
   let debris = Array.from({ length: 34 }, () => {
     const a = rand(0, TAU), s = C * rand(0.4, 1.1);
-    return { x: cx, y: cy, vx: Math.cos(a) * s, vy: Math.sin(a) * s, r: rand(0, TAU), vr: rand(-12, 12), s: C * rand(0.008, 0.02), c: pick(['#111', '#ffd400', '#ff2a2a']) };
+    return { x: ox, y: oy, vx: Math.cos(a) * s, vy: Math.sin(a) * s, r: rand(0, TAU), vr: rand(-12, 12), s: C * rand(0.008, 0.02), c: pick(['#111', '#ffd400', '#ff2a2a']) };
   });
   return {
     sound(a) { boom(a); },
@@ -40,7 +42,7 @@ function bam(env) {
         ctx.strokeStyle = i === 1 ? '#ffd400' : '#ffffff';
         ctx.lineWidth = C * 0.045 * (1 - p);
         ctx.beginPath();
-        ctx.arc(cx, cy, C * 1.1 * easeOutCubic(p), 0, TAU);
+        ctx.arc(ox, oy, C * 1.1 * easeOutCubic(p), 0, TAU);
         ctx.stroke();
       }
       if (t < 0.75) {
@@ -50,9 +52,9 @@ function bam(env) {
           const r0 = C * l.r0, r1 = C * 0.9;
           const ca = Math.cos(l.a), sa = Math.sin(l.a);
           ctx.beginPath();
-          ctx.moveTo(cx + ca * r0, cy + sa * r0);
-          ctx.lineTo(cx + Math.cos(l.a + l.w) * r1, cy + Math.sin(l.a + l.w) * r1);
-          ctx.lineTo(cx + Math.cos(l.a - l.w) * r1, cy + Math.sin(l.a - l.w) * r1);
+          ctx.moveTo(ox + ca * r0, oy + sa * r0);
+          ctx.lineTo(ox + Math.cos(l.a + l.w) * r1, oy + Math.sin(l.a + l.w) * r1);
+          ctx.lineTo(ox + Math.cos(l.a - l.w) * r1, oy + Math.sin(l.a - l.w) * r1);
           ctx.closePath();
           ctx.fill();
         }
@@ -114,4 +116,4 @@ function bam(env) {
   };
 }
 
-export default { id: 'bam', face: true, name: 'БАХ!', emoji: '💥', make: bam };
+export default { id: 'bam', face: true, name: 'БАХ!', emoji: '💥', gesture: 'Closed_Fist', make: bam };

@@ -66,6 +66,15 @@ body.rec #recbtn::after { width: 26px; height: 26px; border-radius: 7px; }
   display: grid; place-items: center;
 }
 #flip svg { width: 24px; height: 24px; }
+#spells {
+  -webkit-appearance: none; appearance: none; outline: none; -webkit-tap-highlight-color: transparent;
+  position: absolute; left: 0; bottom: 0; width: 38px; height: 38px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--panel); padding: 0; cursor: pointer;
+  font-size: 19px; line-height: 1; display: grid; place-items: center;
+  transition: opacity .2s ease, filter .2s ease;
+}
+#spells[aria-pressed="false"] { opacity: .45; filter: grayscale(1); }
+#spells[hidden] { display: none; }
 #flip[hidden] { display: none; }
 #time { width: 48px; font-variant-numeric: tabular-nums; color: var(--muted); text-align: center; }
 body.rec #time { color: var(--accent); }
@@ -98,6 +107,8 @@ body.rec #time { color: var(--accent); }
   position: absolute; top: 5px; right: 7px;
   font: 11px/1 ui-monospace, Menlo, monospace; color: var(--muted);
 }
+.fx .g { position: absolute; top: 4px; left: 6px; font-style: normal; font-size: 13px; line-height: 1; }
+body.nospells .fx .g { display: none; }
 .hint { color: var(--muted); font-size: 12px; margin-top: 12px; text-align: center; }
 @media (hover: none) { .fx kbd, .hint { display: none; } }
 @media (orientation: landscape) and (max-height: 1000px) and (min-width: 700px) {
@@ -122,13 +133,14 @@ body.out { padding: 0; background: #000; overflow: hidden; display: block; }
 body.out > :not(.stage):not(#cam) { display: none !important; }
 body.out .stage { width: 100vmin; height: 100vmin; margin: 0 auto; }
 body.out #out { border-radius: 0; box-shadow: none; }
-body.out #ring { display: none; }
+body.out #ring, body.out #spells { display: none; }
 @media (max-width: 520px) {
   :root { --stage: min(80vw, 46vh, 520px); }
   #fx { grid-template-columns: repeat(4, 1fr); gap: 6px; }
   .fx { padding: 7px 2px 6px; border-radius: 12px; }
   .fx .e { font-size: 22px; }
   .fx .n { font-size: 11px; white-space: nowrap; }
+  .fx .g { top: 3px; left: 4px; font-size: 11px; }
   .controls { margin: 12px 0 4px; }
 }
 #preview {
@@ -154,6 +166,7 @@ body.out #ring { display: none; }
 <div class="stage">
   <canvas id="out"></canvas>
   <svg id="ring" viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="48"/><circle class="p" cx="50" cy="50" r="48"/></svg>
+  <button id="spells" aria-label="Жесты" title="Жесты" aria-pressed="true">✋</button>
 </div>
 <video id="cam" playsinline muted></video>
 <div class="controls">
@@ -163,7 +176,7 @@ body.out #ring { display: none; }
 </div>
 <div id="status"></div>
 <div id="fx"></div>
-<div class="hint">Пробел или кнопка: запись; держи кнопку, чтобы писать, пока держишь. Клавиши 1–0, q–p, a и s: эффекты. Можно жать во время записи и по несколько сразу.</div>
+<div class="hint">Пробел или кнопка: запись; держи кнопку, чтобы писать, пока держишь. Клавиши 1–0, q–p, a и s: эффекты. Можно жать во время записи и по несколько сразу.<br>Покажи в камеру жест со значка на кнопке, и реакция включится сама.</div>
 <div id="preview" hidden>
   <video playsinline loop controls muted></video>
   <div id="saved"></div>

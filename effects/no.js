@@ -58,4 +58,4 @@ function no(env) {
   };
 }
 
-export default { id: 'no', face: true, name: 'Нет!', emoji: '🚫', make: no };
+export default { id: 'no', face: true, name: 'Нет!', emoji: '🚫', gesture: 'Thumb_Down', make: no };

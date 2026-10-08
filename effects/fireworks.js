@@ -1,7 +1,7 @@
 import { TAU, rand, drawGlow } from './lib.js';
 import { fireworks as launch } from './sfx.js';
 
-function fireworks(env) {
+function fireworks(env, hand) {
   const C = env.C;
   let t = 0;
   let rockets = [];
@@ -28,15 +28,22 @@ function fireworks(env) {
     }
   }
 
+  function fromHand(h) {
+    const g = C * 0.8, pop = C * 0.12;
+    const rise = Math.max(C * 0.15, h.y - C * rand(0.1, 0.35));
+    const vy = Math.sqrt(2 * g * rise + pop * pop);
+    return { x: h.x, y: h.y, vx: (C * rand(0.15, 0.85) - h.x) / ((vy - pop) / g), vy: -vy, hue: rand(0, 360) };
+  }
+
   return {
     sound(a) { launch(a); },
     get done() { return t > 1 && launches.every((l) => l.fired) && !rockets.length && !sparks.length; },
-    update(dt) {
+    update(dt, env) {
       t += dt;
       for (const l of launches) {
         if (!l.fired && t >= l.at) {
           l.fired = true;
-          rockets.push({ x: rand(0.18, 0.82) * C, y: C + 10, vx: rand(-0.06, 0.06) * C, vy: -rand(1.0, 1.3) * C, hue: rand(0, 360) });
+          rockets.push(hand ? fromHand(env.hand || hand) : { x: rand(0.18, 0.82) * C, y: C + 10, vx: rand(-0.06, 0.06) * C, vy: -rand(1.0, 1.3) * C, hue: rand(0, 360) });
         }
       }
       for (const r of rockets) {
@@ -80,4 +87,4 @@ function fireworks(env) {
   };
 }
 
-export default { id: 'fireworks', name: 'Салют', emoji: '🎆', make: fireworks };
+export default { id: 'fireworks', name: 'Салют', emoji: '🎆', gesture: 'Victory', make: fireworks };

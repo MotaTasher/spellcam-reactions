@@ -1,7 +1,7 @@
 import { TAU, rand, pick, clamp, easeOutBack, drawGlow, emojiSprite, heart } from './lib.js';
 import { chime } from './sfx.js';
 
-function hearts(env) {
+function hearts(env, hand) {
   const C = env.C;
   let t = 0;
   let items = [];
@@ -9,16 +9,21 @@ function hearts(env) {
   const total = 70;
   const dur = 2.6;
   const emojis = ['💖', '💗', '💕', '❤️'];
+  const bx = hand ? hand.x : C / 2, by = hand ? hand.y : C / 2;
+  const big = hand ? clamp(hand.size * 2, C * 0.25, C * 0.5) : C * 0.55;
   return {
     sound(a) { chime(a); },
     get done() { return t > dur && !items.length; },
-    update(dt) {
+    update(dt, env) {
       t += dt;
       const want = Math.min(total, Math.floor((t / dur) * total));
+      const src = hand && (env.hand || hand);
       while (emitted < want) {
         const s = C * rand(0.035, 0.09);
         items.push({
-          x: rand(0.05, 0.95) * C, y: C + s, vy: -C * rand(0.22, 0.45),
+          ...(src
+            ? { x: src.x + rand(-0.3, 0.3) * src.size, y: src.y, vx: C * rand(-0.12, 0.12), vy: -C * rand(0.25, 0.5) }
+            : { x: rand(0.05, 0.95) * C, y: C + s, vx: 0, vy: -C * rand(0.22, 0.45) }),
           s, hue: rand(330, 365) % 360, ph: rand(0, TAU), amp: C * rand(0.01, 0.04),
           rot: rand(-0.3, 0.3), age: 0, emoji: Math.random() < 0.25 ? pick(emojis) : null,
         });
@@ -26,6 +31,7 @@ function hearts(env) {
       }
       for (const h of items) {
         h.age += dt;
+        h.x += h.vx * dt;
         h.y += h.vy * dt;
         h.vy *= Math.exp(-0.2 * dt);
       }
@@ -35,11 +41,11 @@ function hearts(env) {
       ctx.save();
       const bp = clamp(t / 1.4, 0, 1);
       if (bp < 1) {
-        const sc = C * 0.55 * easeOutBack(clamp(t / 0.45, 0, 1)) * (1 + 0.04 * Math.sin(t * 18));
+        const sc = big * easeOutBack(clamp(t / 0.45, 0, 1)) * (1 + 0.04 * Math.sin(t * 18));
         ctx.globalAlpha = 0.55 * (1 - bp);
         ctx.globalCompositeOperation = 'lighter';
-        drawGlow(ctx, C / 2, C / 2, sc * 1.1, 340, 0.6 * (1 - bp));
-        ctx.setTransform(sc, 0, 0, sc, C / 2, C / 2);
+        drawGlow(ctx, bx, by, sc * 1.1, 340, 0.6 * (1 - bp));
+        ctx.setTransform(sc, 0, 0, sc, bx, by);
         ctx.fillStyle = 'rgba(255,60,120,0.55)';
         ctx.globalAlpha = 0.55 * (1 - bp);
         ctx.fill(heart());
@@ -76,4 +82,4 @@ function hearts(env) {
   };
 }
 
-export default { id: 'hearts', name: 'Сердечки', emoji: '💖', make: hearts };
+export default { id: 'hearts', name: 'Сердечки', emoji: '💖', gesture: 'ILoveYou', make: hearts };

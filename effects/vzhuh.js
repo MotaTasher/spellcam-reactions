@@ -11,14 +11,20 @@ function star4(ctx, x, y, r) {
   ctx.fill();
 }
 
-function vzhuh(env) {
+function vzhuh(env, hand) {
   const C = env.C;
   const f = faceOrDefault(env);
   const cx = f.box.x + f.box.w / 2, cy = f.box.y + f.box.h / 2;
   const R = clamp(Math.max(f.box.w, f.box.h) * 0.95, C * 0.22, C * 0.42);
   const dur = 2.6, sweep = 0.7;
   const a0 = Math.PI * 0.85, a1 = Math.PI * 2.25;
+  const p2 = hand && { x: clamp(cx + (hand.x < cx ? 1 : -1) * R * 0.9, C * 0.12, C * 0.88), y: clamp(f.box.y + f.box.h * 0.2, C * 0.15, C * 0.6) };
+  const p1 = hand && { x: (hand.x + p2.x) / 2, y: Math.max(-C * 0.2, Math.min(hand.y, p2.y) - R * 1.1) };
   const at = (p) => {
+    if (hand) {
+      const q = 1 - p;
+      return { x: q * q * hand.x + 2 * q * p * p1.x + p * p * p2.x, y: q * q * hand.y + 2 * q * p * p1.y + p * p * p2.y };
+    }
     const a = a0 + (a1 - a0) * p;
     return { x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R * 0.85 };
   };
@@ -122,4 +128,4 @@ function vzhuh(env) {
   };
 }
 
-export default { id: 'vzhuh', name: 'Вжух', emoji: '🪄', face: true, make: vzhuh };
+export default { id: 'vzhuh', name: 'Вжух', emoji: '🪄', face: true, gesture: 'Open_Palm', make: vzhuh };
