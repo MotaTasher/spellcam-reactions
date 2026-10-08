@@ -60,11 +60,12 @@ async function ensureSeg() {
 }
 
 async function handsModel() {
-  const local = base + 'vendor/mediapipe/gesture_recognizer.task';
-  try {
-    const r = await fetch(local, { method: 'HEAD' });
-    if (r.ok) return local;
-  } catch (e) {}
+  for (const local of [base + 'models/gesture_recognizer.task', base + 'vendor/mediapipe/gesture_recognizer.task']) {
+    try {
+      const r = await fetch(local, { method: 'HEAD' });
+      if (r.ok) return local;
+    } catch (e) {}
+  }
   return HANDS;
 }
 
