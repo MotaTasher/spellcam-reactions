@@ -36,6 +36,14 @@ const segIn = document.createElement('canvas');
 const segCtx = segIn.getContext('2d', { willReadFrequently: false });
 const maskSrc = document.createElement('canvas');
 const maskSrcCtx = maskSrc.getContext('2d');
+const HIST_FPS = 15;
+const HIST_N = Math.ceil(HIST_FPS * 3.6);
+const HIST_SIDE = Math.round(C / 2);
+const hist = [];
+let histHead = 0;
+let histAt = -Infinity;
+let clock = 0;
+let shown = null;
 
 let stream = null;
 let faceDet = null;
@@ -80,13 +88,55 @@ function edgePoint() {
   return null;
 }
 
+function remember() {
+  if (clock - histAt < 1 / HIST_FPS - 0.004) return;
+  histAt = clock;
+  let h;
+  if (hist.length < HIST_N) {
+    const c = document.createElement('canvas');
+    c.width = c.height = HIST_SIDE;
+    h = { canvas: c, g: c.getContext('2d'), t: 0, face: null };
+    hist.push(h);
+  } else {
+    h = hist[histHead];
+    histHead = (histHead + 1) % HIST_N;
+  }
+  h.g.drawImage(frame, 0, 0, HIST_SIDE, HIST_SIDE);
+  h.t = clock;
+  h.face = face && { eyes: face.eyes.map((p) => ({ x: p.x, y: p.y })), box: { ...face.box } };
+}
+
+function recall(sec) {
+  if (!hist.length) return null;
+  const want = clock - Math.max(0, +sec || 0);
+  let best = hist[0];
+  for (const h of hist) if (Math.abs(h.t - want) < Math.abs(best.t - want)) best = h;
+  return { canvas: best.canvas, face: best.face, ago: clock - best.t };
+}
+
+function pickSource() {
+  shown = null;
+  for (let i = active.length - 1; i >= 0; i--) {
+    const inst = active[i].inst;
+    if (!inst.source) continue;
+    const r = inst.source(env);
+    if (!r) continue;
+    const img = r.canvas || r;
+    if (!(img.width || img.videoWidth)) continue;
+    shown = { img, face: r.canvas ? r.face || null : null };
+    return;
+  }
+}
+
 const env = {
   C,
-  get face() { return face; },
+  get face() { return (shown && shown.face) || face; },
   get mask() { return maskReady ? maskCanvas : null; },
   frame,
   layer: (i) => layers[i],
   edgePoint,
+  history: recall,
+  get historySpan() { return hist.length ? clock - hist[histHead].t : 0; },
 };
 
 const params = new URLSearchParams(location.search);
@@ -308,6 +358,7 @@ let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
+  clock += dt;
   if (video.readyState >= 2 && video.videoWidth) {
     if (!camReadyAt) camReadyAt = performance.now();
     updateCrop();
@@ -340,8 +391,10 @@ function loop(now) {
     }
   }
   followFace(dt);
+  if (camReadyAt) remember();
   for (const e of active) e.inst.update(dt, env);
   active = active.filter((e) => !e.inst.done);
+  pickSource();
   render();
   syncButtons();
   if (hud) drawHud(dt, now);
@@ -384,7 +437,7 @@ function render() {
     ctx.translate(-x, -y);
   }
   ctx.filter = filters.join(' ') || 'none';
-  ctx.drawImage(frame, 0, 0);
+  ctx.drawImage(shown ? shown.img : frame, 0, 0, C, C);
   ctx.filter = 'none';
   for (const e of active) if (e.inst.base) e.inst.base(ctx, env);
   for (const e of active) e.inst.draw(ctx, env);
@@ -449,7 +502,7 @@ function syncButtons() {
   for (const b of document.querySelectorAll('.fx')) b.classList.toggle('on', on.has(b.dataset.id));
 }
 
-const KEYS = '1234567890qwertyuiop';
+const KEYS = '1234567890qwertyuiopasdfghjkl';
 
 function buildButtons() {
   const bar = $('#fx');
@@ -616,4 +669,4 @@ $('#flip').addEventListener('click', flipCamera);
   }
 })();
 
-window.__fx = { ids: EFFECTS.map((e) => e.id), meta: EFFECTS.map((e) => ({ id: e.id, name: e.name, emoji: e.emoji, make: typeof e.make === 'function' })), fire: (id) => fire(EFFECTS.find((e) => e.id === id)), make: (id) => EFFECTS.find((e) => e.id === id).make(env), toggleRec, get active() { return active.map((e) => e.def.id); }, get face() { return face; }, get mixed() { return recMixed; } };
+window.__fx = { ids: EFFECTS.map((e) => e.id), meta: EFFECTS.map((e) => ({ id: e.id, name: e.name, emoji: e.emoji, make: typeof e.make === 'function' })), fire: (id) => fire(typeof id === 'string' ? EFFECTS.find((e) => e.id === id) : id), make: (id) => EFFECTS.find((e) => e.id === id).make(env), toggleRec, history: recall, get span() { return env.historySpan; }, get shown() { return !!shown; }, get active() { return active.map((e) => e.def.id); }, get face() { return face; }, get mixed() { return recMixed; } };

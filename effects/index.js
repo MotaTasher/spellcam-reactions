@@ -17,5 +17,8 @@ import yes from './yes.js';
 import drumroll from './drumroll.js';
 import crickets from './crickets.js';
 import applause from './applause.js';
+import replay from './replay.js';
+import freeze from './freeze.js';
+import rewind from './rewind.js';
 
-export const EFFECTS = [fireworks, confetti, hearts, money, bam, vzhuh, ogo, haha, lasers, sad, deal, wasted, drama, aura, no, yes, drumroll, crickets, applause];
+export const EFFECTS = [fireworks, confetti, hearts, money, bam, vzhuh, ogo, haha, lasers, sad, deal, wasted, drama, aura, no, yes, drumroll, crickets, applause, replay, freeze, rewind];

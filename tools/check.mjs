@@ -1,5 +1,7 @@
 // Проверка реакций: каждая запускается на мультяшном лице, не должна ронять
 // страницу, должна закончиться за 15 секунд и не тормозить кадр.
+// Плюс движок прошлых кадров: env.history, хук source и реакции со временем,
+// нажатые до того, как камера успела что-то запомнить.
 //   python3 server.py &   и   CHROME=/путь/к/chrome node tools/check.mjs [id …]
 import puppeteer from 'puppeteer-core';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -73,6 +75,101 @@ for (const id of ids) {
   else if (s && s.peak > 1) fail(`«${id}»: звук клиппует (пик ${s.peak.toFixed(2)})`);
   else if (s) console.log(`  ♪ ${s.secs.toFixed(1)} с, пик ${s.peak.toFixed(2)}`);
   await sleep(300);
+}
+
+// Прошлые кадры и хук source. Пробные эффекты подменяют кадр сплошным цветом:
+// цвет в центре кадра должен смениться, лицо из подменённого кадра должны видеть
+// остальные эффекты, а из двух подмен побеждает нажатая последней.
+await page.waitForFunction(() => window.__fx.active.length === 0, { timeout: 20000 }).catch(() => {});
+errors.length = 0;
+const h = await page.evaluate(async () => {
+  const fx = window.__fx;
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const raf = () => new Promise((r) => requestAnimationFrame(r));
+  const settle = async (ms) => { await wait(ms); await raf(); await raf(); };
+  const now = fx.history(0), one = fx.history(1), far = fx.history(100);
+  const res = { span: fx.span, now: now && now.ago, one: one && one.ago, far: far && far.ago, side: now && now.canvas.width, face: !!(one && one.face) };
+  const solid = (color) => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 8;
+    const g = c.getContext('2d');
+    g.fillStyle = color;
+    g.fillRect(0, 0, 8, 8);
+    return c;
+  };
+  const fake = { eyes: [{ x: 11, y: 22 }, { x: 33, y: 22 }], box: { x: 5, y: 6, w: 40, h: 50 } };
+  const probe = (id, canvas, face, life) => ({ id, name: id, emoji: '·', make: () => {
+    let t = 0;
+    return { update(dt) { t += dt; }, draw() {}, get done() { return t > life; }, source: () => (face ? { canvas, face } : canvas) };
+  } });
+  let seen = null;
+  const watcher = { id: 'probe-watch', name: 'watch', emoji: '·', make: () => {
+    let t = 0;
+    return { update(dt, env) { t += dt; seen = env.face; }, draw() {}, get done() { return t > 1.4; } };
+  } };
+  const out = document.querySelector('#out');
+  const px = () => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 1;
+    const g = c.getContext('2d');
+    g.drawImage(out, out.width / 2, out.height / 2, 1, 1, 0, 0, 1, 1);
+    return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3);
+  };
+  fx.fire(probe('probe-red', solid('#f00'), null, 1.2));
+  fx.fire(watcher);
+  await settle(150);
+  res.red = px();
+  fx.fire(probe('probe-green', solid('#0f0'), fake, 0.4));
+  await settle(150);
+  res.green = px();
+  res.seen = seen;
+  await settle(500);
+  res.back = px();
+  await settle(900);
+  res.after = fx.shown;
+  return res;
+});
+const near = (a, b) => a && a.every((v, i) => Math.abs(v - b[i]) < 12);
+const failedBefore = failed;
+if (errors.length) fail(`история кадров: ошибка на странице: ${errors[0]}`);
+if (!(h.span >= 2 && h.span <= 4.5)) fail(`история кадров: через 4 с видео помнится ${h.span} с (ждали 2–4,5)`);
+if (!(h.now < 0.15)) fail(`история кадров: history(0) отстаёт на ${h.now} с`);
+if (!(Math.abs(h.one - 1) < 0.1)) fail(`история кадров: history(1) вернул кадр ${h.one} с назад`);
+if (!(Math.abs(h.far - h.span) < 0.01)) fail(`история кадров: history(100) должен вернуть самый старый кадр (${h.far} против ${h.span})`);
+if (!near(h.red, [255, 0, 0])) fail(`source: кадр не подменился (в центре ${h.red})`);
+if (!near(h.green, [0, 255, 0])) fail(`source: последний нажатый не победил (в центре ${h.green})`);
+if (JSON.stringify(h.seen) !== JSON.stringify({ eyes: [{ x: 11, y: 22 }, { x: 33, y: 22 }], box: { x: 5, y: 6, w: 40, h: 50 } })) fail('source: остальные эффекты не видят лицо из подменённого кадра');
+if (!near(h.back, [255, 0, 0])) fail(`source: после конца подмены не вернулась предыдущая (в центре ${h.back})`);
+if (h.after) fail('source: подмена осталась после конца эффектов');
+if (failed === failedBefore) console.log(`✓ история кадров: ${h.span.toFixed(1)} с, кадр ${h.side}px, лицо ${h.face ? 'запомнено' : 'нет'}; source подменяет кадр и лицо`);
+
+// Реакции со временем, нажатые сразу после открытия страницы (камера ещё не готова,
+// прошлого нет) и в первые доли секунды: не падают и заканчиваются.
+const timed = await page.evaluate(() => window.__fx.ids.filter((id) => typeof window.__fx.make(id).source === 'function'));
+if (timed.length) {
+  const early = await browser.newPage();
+  await early.setViewport({ width: 480, height: 480 });
+  const earlyErrors = [];
+  early.on('pageerror', (e) => earlyErrors.push(e.message));
+  await early.goto(url, { waitUntil: 'load' });
+  await early.waitForFunction(() => window.__fx && window.__fx.ids, { timeout: 30000 });
+  const r = await early.evaluate(async (ids) => {
+    const fx = window.__fx;
+    const raf = () => new Promise((res) => requestAnimationFrame(res));
+    const t0 = performance.now();
+    const spans = [fx.span];
+    for (const id of ids) fx.fire(id);
+    while (fx.span === 0 && performance.now() - t0 < 15000) await raf();
+    for (let i = 0; i < 3; i++) await raf();
+    spans.push(fx.span);
+    for (const id of ids) fx.fire(id);
+    while (fx.active.some((id) => ids.includes(id)) && performance.now() - t0 < 30000) await raf();
+    return { spans, still: fx.active.filter((id) => ids.includes(id)) };
+  }, timed);
+  await early.close();
+  if (earlyErrors.length) fail(`реакции со временем без прошлого: ошибка на странице: ${earlyErrors[0]}`);
+  else if (r.still.length) fail(`реакции со временем без прошлого не закончились: ${r.still.join(', ')}`);
+  else console.log(`✓ без прошлого (${r.spans.map((v) => v.toFixed(2)).join(' и ')} с): ${timed.join(', ')}`);
 }
 await browser.close();
 if (failed) {

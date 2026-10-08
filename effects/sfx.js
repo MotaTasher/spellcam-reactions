@@ -3,6 +3,7 @@ const EPS = 0.0001;
 function envelope(g, t, dur, attack, release, peak) {
   const a = Math.min(Math.max(attack, 0.002), dur * 0.5);
   const p = Math.max(peak, EPS);
+  g.gain.value = EPS;
   g.gain.setValueAtTime(EPS, t);
   g.gain.exponentialRampToValueAtTime(p, t + a);
   g.gain.setValueAtTime(p, Math.max(t + a, t + dur - release));
@@ -13,6 +14,10 @@ function shape(ac, t, dur, f) {
   const n = ac.createBiquadFilter();
   n.type = f.type || 'lowpass';
   n.Q.value = f.q ?? 1;
+  if (f.curve) {
+    n.frequency.setValueCurveAtTime(f.curve, t, f.glide ?? dur);
+    return n;
+  }
   n.frequency.setValueAtTime(f.from, t);
   if (f.to) n.frequency.exponentialRampToValueAtTime(f.to, t + (f.glide ?? dur));
   return n;
@@ -263,4 +268,55 @@ export function applause(a, at = 0, dur = 2.6) {
     const w = Math.sin((s / dur) * Math.PI);
     noise(a, { at: at + s, dur: 0.02 + Math.random() * 0.02, gain: 0.08 + 0.16 * w, attack: 0.002, release: 0.015, filter: { type: 'bandpass', from: 1500 + Math.random() * 2000, q: 1.5 } });
   }
+}
+
+export function sting(a, at = 0, cut = 0.22, up = true) {
+  noise(a, { at, dur: cut + 0.06, gain: 0.42, attack: up ? cut * 0.9 : 0.01, release: up ? 0.05 : cut, filter: { type: 'bandpass', from: up ? 300 : 4500, to: up ? 4500 : 300, q: 1.3 } });
+  const s = at + cut;
+  hit(a, s, 0.42);
+  const root = up ? 293.66 : 329.63;
+  [1, 1.26, 1.5, 2].forEach((k) => tone(a, {
+    at: s, type: 'sawtooth', from: root * k, dur: 0.45, gain: 0.055, attack: 0.004, release: 0.35,
+    filter: { type: 'lowpass', from: 4200, to: 700, glide: 0.4, q: 1.2 },
+  }));
+  noise(a, { at: s, dur: 0.5, gain: 0.1, attack: 0.002, release: 0.45, filter: { type: 'highpass', from: 6500 } });
+}
+
+export function slowMo(a, at = 0, dur = 1.1) {
+  tone(a, { at, type: 'sine', from: 190, to: 42, glide: dur * 0.8, dur, gain: 0.34, attack: 0.01, release: dur * 0.7 });
+  tone(a, { at, type: 'triangle', from: 380, to: 84, glide: dur * 0.8, dur: dur * 0.8, gain: 0.08, attack: 0.01, release: dur * 0.5 });
+  noise(a, { at, dur, gain: 0.16, attack: 0.01, release: dur * 0.8, filter: { type: 'lowpass', from: 1600, to: 90, glide: dur * 0.8 } });
+}
+
+export function scratch(a, at = 0, back = false) {
+  const n = 64, pitch = new Float32Array(n), band = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = i / (n - 1);
+    const v = back ? Math.pow(x, 1.6) : Math.abs(Math.sin(Math.PI * 2 * x * 0.95)) * (1 - 0.35 * x);
+    pitch[i] = 70 + 820 * v;
+    band[i] = 400 + 3800 * v;
+  }
+  const dur = back ? 0.2 : 0.36;
+  tone(a, { at, type: 'sawtooth', curve: pitch, dur, gain: 0.34, attack: 0.004, release: back ? 0.04 : 0.06, filter: { type: 'bandpass', curve: band, q: 1.6 } });
+  noise(a, { at, dur, gain: 0.8, attack: 0.004, release: back ? 0.04 : 0.06, filter: { type: 'bandpass', curve: band, q: 2.2 } });
+  if (!back) hit(a, at + dur - 0.02, 0.32);
+}
+
+export function clunk(a, at = 0, gain = 0.45) {
+  noise(a, { at, dur: 0.05, gain, attack: 0.001, release: 0.04, filter: { type: 'bandpass', from: 1600, q: 2.5 } });
+  tone(a, { at, type: 'square', from: 210, to: 80, glide: 0.06, dur: 0.08, gain: gain * 0.35, attack: 0.001, release: 0.06, filter: { type: 'lowpass', from: 1100 } });
+}
+
+export function whir(a, at = 0, dur = 0.8) {
+  tone(a, { at, type: 'sawtooth', from: 150, to: 820, glide: dur, dur, gain: 0.18, attack: 0.05, release: 0.08, vibrato: { rate: 23, cents: 60 }, filter: { type: 'bandpass', from: 600, to: 2400, q: 2 } });
+  noise(a, { at, dur, gain: 0.24, attack: 0.06, release: 0.08, filter: { type: 'bandpass', from: 2000, to: 5200, q: 0.9 } });
+  const n = 40, curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) curve[i] = 900 + 1500 * (i / n) + Math.sin(i * 2.7) * 380 + Math.sin(i * 1.3) * 260;
+  tone(a, { at, type: 'square', curve, dur, gain: 0.08, attack: 0.05, release: 0.08, filter: { type: 'bandpass', from: 1800, q: 1.5 } });
+}
+
+export function tapeStart(a, at = 0) {
+  clunk(a, at, 0.5);
+  tone(a, { at: at + 0.05, type: 'sine', from: 70, to: 260, glide: 0.18, dur: 0.24, gain: 0.16, attack: 0.02, release: 0.1 });
+  noise(a, { at: at + 0.04, dur: 0.35, gain: 0.06, attack: 0.02, release: 0.3, filter: { type: 'highpass', from: 3000 } });
 }

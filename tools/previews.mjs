@@ -1,6 +1,8 @@
 // Анимированные превью реакций для README: docs/previews/<id>.gif.
 //   python3 server.py &   и   CHROME=/путь/к/chrome node tools/previews.mjs [id …]
 // Камера подменяется видео docs/demo/cartoon.webm (мультяшное лицо).
+// Реакции со временем (хук source: повтор, стоп-кадр, перемотка) пишутся целиком
+// и с секундой живого кадра до нажатия, иначе в превью не видно, что что-то вернулось.
 import puppeteer from 'puppeteer-core';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -37,9 +39,14 @@ for (const id of ids) {
       c.restore();
       return canvas.toDataURL('image/jpeg', 0.92);
     };
-    window.__fx.fire(id);
+    const timed = typeof window.__fx.make(id).source === 'function';
+    const lead = timed ? 1200 : 0;
     const t0 = performance.now();
-    while (performance.now() - t0 < 2600) {
+    let fired = false;
+    for (;;) {
+      const el = performance.now() - t0;
+      if (!fired && el >= lead) { window.__fx.fire(id); fired = true; }
+      if (timed ? (fired && !window.__fx.active.includes(id) && el > lead + 600) || el > 7000 : el >= 2600) break;
       const next = t0 + (out.length + 1) * (1000 / 15);
       out.push(snap());
       await new Promise((r) => setTimeout(r, Math.max(0, next - performance.now())));
