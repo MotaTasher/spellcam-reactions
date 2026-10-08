@@ -75,13 +75,14 @@ function replay(env) {
     const pin = clamp((t - CUT - 0.05) / 0.35, 0, 1), pout = clamp((t - out + 0.25) / 0.25, 0, 1);
     if (pin <= 0 || pout >= 1) return;
     const slide = (1 - easeOutBack(pin)) * -0.5 * C + pout * -0.5 * C;
-    const h = C * 0.088, y = C * 0.17, x = C * 0.14 + slide;
+    const h = C * 0.088, y = C * 0.15;
     ctx.save();
     ctx.font = `italic 900 ${h * 0.62}px "Arial Black", Impact, system-ui, sans-serif`;
     const tw = ctx.measureText('ПОВТОР').width;
     ctx.font = `700 ${h * 0.4}px system-ui, sans-serif`;
     const sw = ctx.measureText('0,5×').width;
     const w = h * 1.05 + tw + h * 0.35 + sw + h * 0.45;
+    const x = (C - w) / 2 + slide;
     const sk = h * 0.28;
     ctx.beginPath();
     ctx.moveTo(x + sk, y);
